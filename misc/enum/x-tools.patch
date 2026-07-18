@@ -248,7 +248,7 @@ diff --git a/internal/gcimporter/gcimporter_test.go b/internal/gcimporter/gcimpo
 index 0f08f47..769b772 100644
 --- a/internal/gcimporter/gcimporter_test.go
 +++ b/internal/gcimporter/gcimporter_test.go
-@@ -771,6 +771,136 @@ func TestIssue57015(t *testing.T) {
+@@ -771,6 +771,135 @@ func TestIssue57015(t *testing.T) {
  	compileAndImportPkg(t, "issue57015")
  }
  
