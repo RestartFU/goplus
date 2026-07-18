@@ -90,7 +90,7 @@ try {
     Invoke-Native -File "git.exe" -Arguments @("clone", "--quiet", "--filter=blob:none", "--no-checkout", $ToolsRepo, $GoplsRepo)
     Invoke-Native -File "git.exe" -Arguments @("-C", $GoplsRepo, "checkout", "--quiet", $GoplsRef)
     $GoplsDir = Join-Path $GoplsRepo "gopls"
-    Invoke-Native -File "git.exe" -Arguments @("-C", $GoplsDir, "apply", (Join-Path $RepoRoot "misc\enum\gopls.patch"))
+    Invoke-Native -File "git.exe" -Arguments @("-C", $GoplsRepo, "apply", "--directory=gopls", (Join-Path $RepoRoot "misc\enum\gopls.patch"))
 
     $PrivateGo = Join-Path $StageGo "bin\go.exe"
     $env:GOROOT = $StageGo

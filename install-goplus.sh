@@ -98,7 +98,7 @@ echo "Fetching patched gopls ($gopls_ref)"
 git clone --quiet --filter=blob:none --no-checkout "$tools_repo" "$work/gopls-repo"
 git -C "$work/gopls-repo" checkout --quiet "$gopls_ref"
 gopls_dir=$work/gopls-repo/gopls
-git -C "$gopls_dir" apply "$repo_root/misc/enum/gopls.patch"
+git -C "$work/gopls-repo" apply --directory=gopls "$repo_root/misc/enum/gopls.patch"
 
 private_go=$stage/go/bin/go
 export GOROOT=$stage/go
