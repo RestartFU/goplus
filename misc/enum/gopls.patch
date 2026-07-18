@@ -1,9 +1,9 @@
 diff --git a/internal/analysis/fillswitch/enum_test.go b/internal/analysis/fillswitch/enum_test.go
 new file mode 100644
-index 0000000..2241e35
+index 0000000..17ad99f
 --- /dev/null
 +++ b/internal/analysis/fillswitch/enum_test.go
-@@ -0,0 +1,118 @@
+@@ -0,0 +1,126 @@
 +// Copyright 2026 The Go Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style
 +// license that can be found in the LICENSE file.
@@ -100,6 +100,12 @@ index 0000000..2241e35
 +	case A:
 +	default:
 +	}
++}
++func useType(value p.E) {
++	switch value.(type) {
++	case A:
++	default:
++	}
 +}`)
 +	info := &types.Info{
 +		Types:      make(map[ast.Expr]types.TypeAndValue),
@@ -114,16 +120,18 @@ index 0000000..2241e35
 +		t.Fatal(err)
 +	}
 +	diagnostics := fillswitch.Diagnose(use, token.NoPos, token.NoPos, consumer, info)
-+	if len(diagnostics) != 1 {
-+		t.Fatalf("got %d diagnostics, want 1", len(diagnostics))
++	if len(diagnostics) != 2 {
++		t.Fatalf("got %d diagnostics, want 2", len(diagnostics))
 +	}
-+	text := string(diagnostics[0].SuggestedFixes[0].TextEdits[0].NewText)
-+	if !strings.Contains(text, "case B:") || strings.Contains(text, "default:") {
-+		t.Fatalf("enum switch edit = %q, want B without duplicate default", text)
++	for _, diagnostic := range diagnostics {
++		text := string(diagnostic.SuggestedFixes[0].TextEdits[0].NewText)
++		if !strings.Contains(text, "case B:") || strings.Contains(text, "default:") {
++			t.Fatalf("enum switch edit = %q, want B without duplicate default", text)
++		}
 +	}
 +}
 diff --git a/internal/analysis/fillswitch/fillswitch.go b/internal/analysis/fillswitch/fillswitch.go
-index 7b1a7e8..8e17fff 100644
+index 7b1a7e8..3fc0449 100644
 --- a/internal/analysis/fillswitch/fillswitch.go
 +++ b/internal/analysis/fillswitch/fillswitch.go
 @@ -10,6 +10,7 @@ import (
@@ -134,7 +142,15 @@ index 7b1a7e8..8e17fff 100644
  
  	"golang.org/x/tools/go/analysis"
  	"golang.org/x/tools/internal/typesinternal"
-@@ -59,6 +60,16 @@ func suggestedFixTypeSwitch(stmt *ast.TypeSwitchStmt, pkg *types.Package, info *
+@@ -51,14 +52,23 @@ func Diagnose(f *ast.File, start, end token.Pos, pkg *types.Package, info *types
+ }
+ 
+ func suggestedFixTypeSwitch(stmt *ast.TypeSwitchStmt, pkg *types.Package, info *types.Info) *analysis.SuggestedFix {
+-	if hasDefaultCase(stmt.Body) {
+-		return nil
+-	}
+-
+ 	namedType := namedTypeFromTypeSwitch(stmt, info)
  	if namedType == nil {
  		return nil
  	}
@@ -148,20 +164,34 @@ index 7b1a7e8..8e17fff 100644
 +		}
 +		return suggestedFixEnumSwitch(stmt.End(), stmt.Body, tag, namedType, pkg, info)
 +	}
++	if hasDefaultCase(stmt.Body) {
++		return nil
++	}
  
  	existingCases := caseTypes(stmt.Body, info)
  	// Gather accessible package-level concrete types
-@@ -144,6 +155,9 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
+@@ -136,14 +146,16 @@ func suggestedFixTypeSwitch(stmt *ast.TypeSwitchStmt, pkg *types.Package, info *
+ }
+ 
+ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.Info) *analysis.SuggestedFix {
+-	if hasDefaultCase(stmt.Body) {
+-		return nil
+-	}
+-
+ 	namedType, ok := info.TypeOf(stmt.Tag).(*types.Named)
  	if !ok {
  		return nil
  	}
 +	if enumType := namedType.EnumType(); enumType != nil && enumType.Origin() == namedType.Origin() {
 +		return suggestedFixEnumSwitch(stmt.End(), stmt.Body, stmt.Tag, namedType, pkg, info)
 +	}
++	if hasDefaultCase(stmt.Body) {
++		return nil
++	}
  
  	existingCases := caseConsts(stmt.Body, info)
  	// Gather accessible named constants of the same type as the switch value.
-@@ -186,6 +200,92 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
+@@ -186,6 +198,92 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
  	}
  }
  
