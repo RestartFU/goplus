@@ -115,6 +115,19 @@ func (check *Checker) compositeLit(U Type, x *operand, e *ast.CompositeLit, hint
 	switch {
 	case e.Type != nil:
 		// composite literal type present - use it
+		if id, _ := e.Type.(*ast.Ident); id != nil {
+			context := U
+			if context == nil {
+				context = hint
+			}
+			if variant := enumVariant(context, id.Name); variant != nil {
+				typ = variant
+				base = typ
+				check.recordUse(id, variant.Obj())
+				check.recordTypeAndValue(id, typexpr, variant, nil)
+				break
+			}
+		}
 		// [...]T array types may only appear with composite literals.
 		// Check for them here so we don't have to handle ... in general.
 		if atyp, _ := e.Type.(*ast.ArrayType); atyp != nil && isdddArray(atyp) {

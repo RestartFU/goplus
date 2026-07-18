@@ -424,9 +424,11 @@ func (check *Checker) collectObjects() {
 				info.objects[0] = NewTypeName(s.Name.Pos(), pkg, s.Name.Value, nil)
 				check.declarePkgObj(s.Name, info.objects[0], &declInfo{file: fileScope, version: check.version, edecl: info})
 				for i, variant := range s.VariantList {
-					obj := NewTypeName(variant.Name.Pos(), pkg, variant.Name.Value, nil)
+					obj := NewTypeName(variant.Name.Pos(), pkg, s.Name.Value+"."+variant.Name.Value, nil)
 					info.objects[i+1] = obj
-					check.declarePkgObj(variant.Name, obj, &declInfo{file: fileScope, version: check.version, edecl: info})
+					check.declare(check.pkg.scope, variant.Name, obj, nopos)
+					check.objMap[obj] = &declInfo{file: fileScope, version: check.version, edecl: info}
+					obj.setOrder(uint32(len(check.objMap)))
 				}
 
 			case *syntax.FuncDecl:

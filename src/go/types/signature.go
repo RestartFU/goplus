@@ -488,7 +488,7 @@ func (check *Checker) validRecv(pos positioner, recv *Var) {
 		}
 		if enumType := T.EnumType(); enumType != nil {
 			if T.Origin() != enumType.Origin() {
-				check.errorf(pos, InvalidRecv, "cannot define method on enum variant %s; use enum type %s as receiver", T.obj.name, enumType.obj.name)
+				check.errorf(pos, InvalidRecv, "cannot define method on enum variant %s; use enum type %s as receiver", enumVariantName(T), enumType.obj.name)
 			}
 			break
 		}

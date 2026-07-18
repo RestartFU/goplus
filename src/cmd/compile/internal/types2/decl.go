@@ -969,7 +969,7 @@ func (check *Checker) declStmt(list []syntax.Decl) {
 			info.objects[0] = NewTypeName(s.Name.Pos(), pkg, s.Name.Value, nil)
 			check.declare(check.scope, s.Name, info.objects[0], s.Name.Pos())
 			for i, variant := range s.VariantList {
-				obj := NewTypeName(variant.Name.Pos(), pkg, variant.Name.Value, nil)
+				obj := NewTypeName(variant.Name.Pos(), pkg, s.Name.Value+"."+variant.Name.Value, nil)
 				info.objects[i+1] = obj
 				check.declare(check.scope, variant.Name, obj, s.Name.Pos())
 			}

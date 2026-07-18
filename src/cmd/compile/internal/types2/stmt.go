@@ -309,12 +309,24 @@ func (check *Checker) caseTypes(x *operand, types []syntax.Expr, seen map[Type]s
 	var dummy operand
 L:
 	for _, e := range types {
+		T = nil
 		// The spec allows the value nil instead of a type.
 		if check.isNil(e) {
 			T = nil
 			check.expr(nil, nil, &dummy, e) // run e through expr so we get the usual Info recordings
 		} else {
-			T = check.varType(e)
+			if x != nil && check.isEnumType(x.typ()) {
+				if id, _ := e.(*syntax.Name); id != nil {
+					if variant := enumVariant(x.typ(), id.Value); variant != nil {
+						T = variant
+						check.recordUse(id, variant.Obj())
+						check.recordTypeAndValue(id, typexpr, variant, nil)
+					}
+				}
+			}
+			if T == nil {
+				T = check.varType(e)
+			}
 			if !isValid(T) {
 				continue L
 			}
@@ -826,7 +838,16 @@ Next:
 			var dummy operand
 			check.expr(nil, nil, &dummy, e)
 		} else {
-			T = check.varType(e)
+			if id, _ := e.(*syntax.Name); id != nil {
+				if variant := enumVariant(x.typ(), id.Value); variant != nil {
+					T = variant
+					check.recordUse(id, variant.Obj())
+					check.recordTypeAndValue(id, typexpr, variant, nil)
+				}
+			}
+			if T == nil {
+				T = check.varType(e)
+			}
 			if !isValid(T) {
 				continue
 			}
@@ -975,7 +996,7 @@ func (check *Checker) enumSwitchExhaustive(at poser, typ Type, seen map[Type]syn
 			}
 		}
 		if !covered {
-			missing = append(missing, variant.Obj().Name())
+			missing = append(missing, enumVariantName(variant))
 		}
 	}
 	if _, covered := seen[nil]; !covered {

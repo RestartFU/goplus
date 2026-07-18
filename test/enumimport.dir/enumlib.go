@@ -28,12 +28,12 @@ enum Option[T any] {
 
 func (o Option[T]) Or(zero T) T {
 	switch o {
-	case Some[T]:
+	case Some:
 		return o.Value
-	case None[T], nil:
+	case None, nil:
 		return zero
 	}
 	return zero
 }
 
-func NewOption() Option[int] { return Some[int]{Value: 9} }
+func NewOption() Option[int] { return Some{Value: 9} }

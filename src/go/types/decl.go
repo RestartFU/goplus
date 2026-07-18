@@ -1026,7 +1026,7 @@ func (check *Checker) declStmt(d ast.Decl) {
 			info.objects[0] = NewTypeName(d.decl.Name.Pos(), pkg, d.decl.Name.Name, nil)
 			check.declare(check.scope, d.decl.Name, info.objects[0], d.decl.Name.Pos())
 			for i, variant := range d.decl.Variants {
-				obj := NewTypeName(variant.Name.Pos(), pkg, variant.Name.Name, nil)
+				obj := NewTypeName(variant.Name.Pos(), pkg, d.decl.Name.Name+"."+variant.Name.Name, nil)
 				info.objects[i+1] = obj
 				check.declare(check.scope, variant.Name, obj, d.decl.Name.Pos())
 			}

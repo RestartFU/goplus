@@ -486,6 +486,35 @@ func (t *Named) EnumVariants() []*Named {
 	return result
 }
 
+func enumVariant(typ Type, name string) *Named {
+	named, _ := Unalias(typ).(*Named)
+	if named == nil {
+		return nil
+	}
+	orig := named.Origin().unpack()
+	if orig.enumInfo == nil && orig.fromRHS == nil {
+		return nil
+	}
+	parent := named.EnumType()
+	if parent == nil || parent.Origin() != named.Origin() {
+		return nil
+	}
+	for _, variant := range named.EnumVariants() {
+		if enumVariantName(variant) == name {
+			return variant
+		}
+	}
+	return nil
+}
+
+func enumVariantName(variant *Named) string {
+	name := variant.Obj().Name()
+	if i := strings.LastIndexByte(name, '.'); i >= 0 {
+		return name[i+1:]
+	}
+	return name
+}
+
 func (t *Named) enumVariantMarker() string {
 	orig := t.Origin()
 	for i := range orig.NumMethods() {

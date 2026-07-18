@@ -27,16 +27,18 @@ func (r Result) Value() int {
 	}
 	return 0
 }
-func makeResult() Result { return Ok{value: 42} }
+func makeResult() Result { return Result.Ok{value: 42} }
 `
 	pkg, err := typecheck(src, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	result := pkg.Scope().Lookup("Result").Type().(*Named)
-	ok := pkg.Scope().Lookup("Ok").Type().(*Named)
-	errVariant := pkg.Scope().Lookup("Err").Type().(*Named)
-	none := pkg.Scope().Lookup("None").Type().(*Named)
+	variants := result.EnumVariants()
+	if len(variants) != 3 || variants[0].Obj().Name() != "Result.Ok" || variants[1].Obj().Name() != "Result.Err" || variants[2].Obj().Name() != "Result.None" {
+		t.Fatalf("Result variants = %v, want [Result.Ok Result.Err Result.None]", variants)
+	}
+	ok, errVariant, none := variants[0], variants[1], variants[2]
 
 	if _, ok := result.Underlying().(*Interface); !ok {
 		t.Fatalf("Result underlying type is %T, want *Interface", result.Underlying())
@@ -57,10 +59,6 @@ func makeResult() Result { return Ok{value: 42} }
 	}
 	if method, _, _ := LookupFieldOrMethod(ok, true, pkg, "Value"); method != nil {
 		t.Error("enum method Value unexpectedly belongs to variant Ok")
-	}
-	variants := result.EnumVariants()
-	if len(variants) != 3 || variants[0].Obj().Name() != "Ok" || variants[1].Obj().Name() != "Err" || variants[2].Obj().Name() != "None" {
-		t.Fatalf("Result variants = %v, want [Ok Err None]", variants)
 	}
 	if ok.EnumType() != result {
 		t.Fatalf("Ok enum type = %v, want Result", ok.EnumType())
@@ -83,7 +81,7 @@ func makeResult() Result { return Ok{value: 42} }
 func TestEnumVariantReceiverRejected(t *testing.T) {
 	const src = `package p
 enum Result { Ok { value int }; Err }
-func (o Ok) Value() int { return o.value }
+func (o Result.Ok) Value() int { return o.value }
 `
 	_, err := typecheck(src, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "cannot define method on enum variant Ok; use enum type Result as receiver") {
@@ -145,7 +143,7 @@ func inspect(result Result) int {
 
 	const expressions = `package p
 enum Result { Ok; Err }
-func makeResult() Result { return Ok{} }
+func makeResult() Result { return Result.Ok{} }
 type Holder struct { Result Result }
 func inspect(h Holder) {
 	switch makeResult() { case Ok:; case Err:; case nil: }
@@ -161,28 +159,28 @@ enum Result { Ok; Err }
 func inspect(result Result) { switch result { case Ok:; case Ok:; case Err:; case nil: } }
 `
 	_, err := typecheck(duplicate, nil, nil)
-	if err == nil || !strings.Contains(err.Error(), "duplicate case Ok in enum switch") {
+	if err == nil || !strings.Contains(err.Error(), "duplicate case Result.Ok in enum switch") {
 		t.Fatalf("duplicate enum case error = %v", err)
 	}
 }
 
 func TestEnumRejectsRecursiveVariants(t *testing.T) {
 	const direct = `package p
-enum E { V { next V } }
+enum E { V { next E.V } }
 `
 	if _, err := typecheck(direct, nil, nil); err == nil || !strings.Contains(err.Error(), "invalid recursive type") {
 		t.Fatalf("direct recursive variant error = %v", err)
 	}
 
 	const mutual = `package p
-enum E { A { b B }; B { a A } }
+enum E { A { b E.B }; B { a E.A } }
 `
 	if _, err := typecheck(mutual, nil, nil); err == nil || !strings.Contains(err.Error(), "invalid recursive type") {
 		t.Fatalf("mutually recursive variant error = %v", err)
 	}
 
 	const indirect = `package p
-enum E { V { parent E; next *V } }
+enum E { V { parent E; next *E.V } }
 `
 	if _, err := typecheck(indirect, nil, nil); err != nil {
 		t.Fatalf("indirect recursive variant: %v", err)
@@ -193,7 +191,7 @@ func TestEnumRejectsPointerVariant(t *testing.T) {
 	const src = `package p
 enum Result { Ok }
 type R = Result
-var _ R = &Ok{}
+var _ R = &Result.Ok{}
 `
 	_, err := typecheck(src, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "pointer to enum variant is not an enum value") {
@@ -211,21 +209,21 @@ enum Option[T any] {
 
 func (o Option[T]) Or(zero T) T {
 	switch o {
-	case Some[T]: return o.value
-	case None[T], nil: return zero
+	case Some: return o.value
+	case None, nil: return zero
 	}
 	return zero
 }
 
-var _ Option[int] = Some[int]{value: 1}
+var _ Option[int] = Option.Some[int]{value: 1}
 `
 	pkg, err := typecheck(src, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	option := pkg.Scope().Lookup("Option").Type().(*Named)
-	some := pkg.Scope().Lookup("Some").Type().(*Named)
-	none := pkg.Scope().Lookup("None").Type().(*Named)
+	variants := option.EnumVariants()
+	some, none := variants[0], variants[1]
 	optionParam := option.TypeParams().At(0)
 	someParam := some.TypeParams().At(0)
 	noneParam := none.TypeParams().At(0)
@@ -242,6 +240,27 @@ var _ Option[int] = Some[int]{value: 1}
 	recv := marker.Recv().Type().(*Named)
 	if recv.TypeArgs().Len() != 1 || marker.RecvTypeParams().Len() != 1 {
 		t.Fatalf("marker receiver = %v (type args %d, receiver type params %d)", recv, recv.TypeArgs().Len(), marker.RecvTypeParams().Len())
+	}
+}
+
+func TestEnumVariantsRequireQualification(t *testing.T) {
+	const src = `package p
+enum Result { Ok }
+var inferred Result = Ok{}
+func f() Result { return Ok{} }
+var _ = Result.Ok{}
+`
+	if _, err := typecheck(src, nil, nil); err != nil {
+		t.Fatalf("contextual variants: %v", err)
+	}
+
+	const invalid = `package p
+enum Result { Ok }
+var _ = Ok{}
+`
+	_, err := typecheck(invalid, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "undefined: Ok") {
+		t.Fatalf("bare variant error = %v", err)
 	}
 }
 
