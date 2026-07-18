@@ -596,6 +596,7 @@ func (check *Checker) enumDecl(info *enumDeclInfo) {
 	}
 
 	decl := info.decl
+	check.verifyVersionf(decl, go1_28, "enum declaration")
 	named := make([]*Named, len(info.objects))
 	for i, obj := range info.objects {
 		named[i] = check.newNamed(obj, nil, nil)

@@ -477,6 +477,14 @@ func dcommontype(c rttype.Cursor, t *types.Type) {
 	if onDemand {
 		tflag |= abi.TFlagGCMaskOnDemand
 	}
+	if t.Kind() != types.TINTER {
+		for _, method := range t.Methods() {
+			if method.Sym != nil && strings.HasPrefix(method.Sym.Name, ".enum.") {
+				tflag |= abi.TFlagEnumVariant
+				break
+			}
+		}
+	}
 
 	exported := false
 	p := t.NameString()

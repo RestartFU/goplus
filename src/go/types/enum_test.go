@@ -82,12 +82,30 @@ func makeResult() Result { return Result.Ok{value: 42} }
 	if types.Implements(types.NewPointer(ok), result.Underlying().(*types.Interface)) {
 		t.Error("*Ok implements Result")
 	}
+	forged := types.NewNamed(types.NewTypeName(token.NoPos, pkg, "Forged", nil), types.NewStruct([]*types.Var{
+		types.NewField(token.NoPos, pkg, "Ok", ok, true),
+	}, nil), nil)
+	if types.AssignableTo(forged, result) || types.Implements(forged, result.Underlying().(*types.Interface)) {
+		t.Error("type embedding Ok implements Result")
+	}
 	orSig := types.NewSignatureType(nil, nil, nil,
 		types.NewTuple(types.NewVar(token.NoPos, nil, "", types.Typ[types.Int])),
 		types.NewTuple(types.NewVar(token.NoPos, nil, "", types.Typ[types.Int])), false)
 	orIface := types.NewInterfaceType([]*types.Func{types.NewFunc(token.NoPos, nil, "Value", orSig)}, nil).Complete()
 	if types.Implements(result, orIface) {
 		t.Error("enum convenience methods must not make Result implement another interface")
+	}
+}
+
+func TestEnumVersion(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "enum.go", "package p; type E enum { A }", parser.SkipObjectResolution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = (&types.Config{GoVersion: "go1.27"}).Check("p", fset, []*ast.File{file}, nil)
+	if err == nil || !strings.Contains(err.Error(), "requires go1.28 or later") {
+		t.Fatalf("enum version error = %v", err)
 	}
 }
 

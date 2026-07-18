@@ -69,12 +69,26 @@ func makeResult() Result { return Result.Ok{value: 42} }
 	if Implements(NewPointer(ok), result.Underlying().(*Interface)) {
 		t.Error("*Ok implements Result")
 	}
+	forged := NewNamed(NewTypeName(nopos, pkg, "Forged", nil), NewStruct([]*Var{
+		NewField(nopos, pkg, "Ok", ok, true),
+	}, nil), nil)
+	if AssignableTo(forged, result) || Implements(forged, result.Underlying().(*Interface)) {
+		t.Error("type embedding Ok implements Result")
+	}
 	orSig := NewSignatureType(nil, nil, nil,
 		NewTuple(NewVar(nopos, nil, "", Typ[Int])),
 		NewTuple(NewVar(nopos, nil, "", Typ[Int])), false)
 	orIface := NewInterfaceType([]*Func{NewFunc(nopos, nil, "Value", orSig)}, nil)
 	if Implements(result, orIface) {
 		t.Error("enum convenience methods must not make Result implement another interface")
+	}
+}
+
+func TestEnumVersion(t *testing.T) {
+	conf := Config{GoVersion: "go1.27"}
+	_, err := typecheck("package p; type E enum { A }", &conf, nil)
+	if err == nil || !strings.Contains(err.Error(), "requires go1.28 or later") {
+		t.Fatalf("enum version error = %v", err)
 	}
 }
 

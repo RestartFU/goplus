@@ -45,7 +45,7 @@ func getitab(inter *interfacetype, typ *_type, canfail bool) *itab {
 	if len(inter.Methods) == 0 {
 		throw("internal error - misuse of itab")
 	}
-	if typ.Kind() == abi.Pointer && isEnumInterface(inter) {
+	if isEnumInterface(inter) && typ.TFlag&abi.TFlagEnumVariant == 0 {
 		if canfail {
 			return nil
 		}
@@ -110,8 +110,7 @@ finish:
 }
 
 // isEnumInterface reports whether inter is the sealed runtime interface used
-// to represent an enum. Pointers inherit value-receiver methods in Go, so the
-// runtime must enforce that only variant values, never pointers to variants,
+// to represent an enum. Only concrete types carrying TFlagEnumVariant may
 // satisfy this otherwise-unspellable marker interface.
 func isEnumInterface(inter *interfacetype) bool {
 	if len(inter.Methods) != 1 {

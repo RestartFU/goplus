@@ -269,15 +269,12 @@ func (check *Checker) implements(V, T Type, constraint bool, cause *string) bool
 		return false
 	}
 	if marker := enumInterfaceMarker(Ti); marker != "" {
-		if ptr, _ := Unalias(V).(*Pointer); ptr != nil {
-			if variant, _ := Unalias(ptr.base).(*Named); variant != nil {
-				if variant.enumVariantMarker() == marker {
-					if cause != nil {
-						*cause = check.sprintf("pointer to enum variant %s is not an enum value", variant)
-					}
-					return false
-				}
+		variant, _ := Unalias(V).(*Named)
+		if variant == nil || variant.enumVariantMarker() != marker {
+			if cause != nil {
+				*cause = check.sprintf("%s is not a declared variant of %s", V, T)
 			}
+			return false
 		}
 	}
 

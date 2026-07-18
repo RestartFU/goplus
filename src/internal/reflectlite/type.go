@@ -421,7 +421,7 @@ func implements(T, V *abi.Type) bool {
 	}
 	rT := toRType(T)
 	rV := toRType(V)
-	if V.Kind() == abi.Pointer && isEnumInterface(t, rT) {
+	if isEnumInterface(t, rT) && V.TFlag&abi.TFlagEnumVariant == 0 {
 		return false
 	}
 

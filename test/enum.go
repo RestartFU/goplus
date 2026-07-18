@@ -93,6 +93,14 @@ func main() {
 	if reflect.TypeFor[*Result.Ok]().Implements(reflect.TypeFor[Result]()) {
 		panic("pointer to enum variant implements enum through reflection")
 	}
+	type Forged struct{ Result.Ok }
+	var forged any = Forged{}
+	if _, ok := forged.(Result); ok {
+		panic("embedded enum variant passed runtime assertion")
+	}
+	if reflect.TypeFor[Forged]().Implements(reflect.TypeFor[Result]()) {
+		panic("embedded enum variant implements enum through reflection")
+	}
 
 	var result Result = Ok{value: 42}
 	if inspect(result) != 42 || inspectExpression() != 42 || result.Value() != 42 {
