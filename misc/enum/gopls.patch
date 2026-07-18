@@ -554,7 +554,7 @@ index 60b7b69..c8672f6 100644
  			for _, s := range n.Specs {
  				switch s := s.(type) {
 diff --git a/internal/golang/rename.go b/internal/golang/rename.go
-index 9e04f8d..f8e0664 100644
+index 9e04f8d..2dbcb9f 100644
 --- a/internal/golang/rename.go
 +++ b/internal/golang/rename.go
 @@ -180,7 +180,7 @@ func PrepareRename(ctx context.Context, snapshot *cache.Snapshot, f file.Handle,
@@ -575,7 +575,67 @@ index 9e04f8d..f8e0664 100644
  		return nil, fmt.Errorf("old and new names are the same: %s", newName)
  	}
  	if err := checkRenamable(obj, node); err != nil {
-@@ -1689,6 +1689,13 @@ func (r *docLinkRenamer) update(pgf *parsego.File) (result []diff.Edit, err erro
+@@ -636,6 +636,19 @@ func renameOrdinary(ctx context.Context, snapshot *cache.Snapshot, uri protocol.
+ 		}
+ 	}
+ 
++	// Enum variants have qualified package-scope object names such as
++	// Result.Ok. objectpath.Path uses dots as traversal operators, so it cannot
++	// represent such a name as a package-scope lookup. Find the corresponding
++	// variant directly in each reverse dependency instead.
++	if sourceName(obj) != obj.Name() {
++		declURI := protocol.URIFromPath(pkg.FileSet().File(obj.Pos()).Name())
++		pkgs, err := typeCheckReverseDependencies(ctx, snapshot, declURI, true)
++		if err != nil {
++			return nil, err
++		}
++		return renameEnumVariant(pkgs, PackagePath(obj.Pkg().Path()), obj.Name(), newName)
++	}
++
+ 	// Find objectpath, if object is exported ("" otherwise).
+ 	var declObjPath objectpath.Path
+ 	if obj.Exported() {
+@@ -771,6 +784,30 @@ func renameOrdinary(ctx context.Context, snapshot *cache.Snapshot, uri protocol.
+ 	return renameExported(pkgs, declPkgPath, declObjPath, newName)
+ }
+ 
++// renameEnumVariant renames a variant whose qualified package-scope name
++// cannot be represented by objectpath.Path.
++func renameEnumVariant(pkgs []*cache.Package, declPkgPath PackagePath, qualifiedName, newName string) (map[protocol.DocumentURI][]diff.Edit, error) {
++	allEdits := make(map[protocol.DocumentURI][]diff.Edit)
++	for _, pkg := range pkgs {
++		declPkg := pkg.DependencyTypes(declPkgPath)
++		if declPkg == nil {
++			continue
++		}
++		obj := declPkg.Scope().Lookup(qualifiedName)
++		if obj == nil {
++			continue
++		}
++		editMap, _, err := renameObjects(newName, pkg, obj)
++		if err != nil {
++			return nil, err
++		}
++		for uri, edits := range editMap {
++			allEdits[uri] = append(allEdits[uri], edits...)
++		}
++	}
++	return allEdits, nil
++}
++
+ // renameReceivers renames all receivers of methods of the same named
+ // type as recv. The edits of each successful renaming are added to
+ // editMap; the failed ones are quietly discarded.
+@@ -1337,7 +1374,7 @@ func renameObjects(newName string, pkg *cache.Package, targets ...types.Object)
+ 	r := renamer{
+ 		pkg:          pkg,
+ 		objsToUpdate: make(map[types.Object]bool),
+-		from:         targets[0].Name(),
++		from:         sourceName(targets[0]),
+ 		to:           newName,
+ 	}
+ 
+@@ -1689,6 +1726,13 @@ func (r *docLinkRenamer) update(pgf *parsego.File) (result []diff.Edit, err erro
  			doc = decl.Doc
  		case *ast.FuncDecl:
  			doc = decl.Doc
@@ -589,7 +649,7 @@ index 9e04f8d..f8e0664 100644
  		}
  		err = updateDocLinks(doc)
  		if err != nil {
-@@ -1708,6 +1715,13 @@ func docComment(pgf *parsego.File, curId inspector.Cursor) *ast.CommentGroup {
+@@ -1708,6 +1752,13 @@ func docComment(pgf *parsego.File, curId inspector.Cursor) *ast.CommentGroup {
  			return decl.Doc
  		case *ast.Field:
  			return decl.Doc
@@ -844,14 +904,14 @@ index 0000000..9c448bd
 +	return labels
 +}
 diff --git a/internal/test/integration/misc/hover_test.go b/internal/test/integration/misc/hover_test.go
-index b2e9af7..03d3f9c 100644
+index b2e9af7..168ada6 100644
 --- a/internal/test/integration/misc/hover_test.go
 +++ b/internal/test/integration/misc/hover_test.go
-@@ -424,6 +424,56 @@ func Hello() string {
+@@ -424,6 +424,84 @@ func Hello() string {
  	})
  }
  
-+func TestEnumHoverAndSignature(t *testing.T) {
++func TestEnumTooling(t *testing.T) {
 +	const source = `
 +-- go.mod --
 +module example.com/p
@@ -880,9 +940,20 @@ index b2e9af7..03d3f9c 100644
 +func use(result Result) int {
 +	return result.Or(1)
 +}
++
++func qualified() Result {
++	return Result.Ok{Value: 1}
++}
++-- client/client.go --
++package client
++
++import "example.com/p"
++
++var _ p.Result = p.Result.Ok{Value: 2}
 +`
 +	WithOptions(Modes(Default)).Run(t, source, func(t *testing.T, env *Env) {
 +		env.OpenFile("enum.go")
++		env.OpenFile("client/client.go")
 +
 +		parent, _ := env.Hover(env.RegexpSearch("enum.go", `enum (Result)`))
 +		if !strings.Contains(parent.Value, "enum Result") || !strings.Contains(parent.Value, "Result reports success") {
@@ -897,6 +968,23 @@ index b2e9af7..03d3f9c 100644
 +		signatures := env.SignatureHelp(env.RegexpSearch("enum.go", `result\.Or\(()1`))
 +		if len(signatures.Signatures) != 1 || signatures.Signatures[0].Label != "Or(fallback int) int" {
 +			t.Errorf("Or signatures = %#v", signatures.Signatures)
++		}
++
++		use := env.RegexpSearch("enum.go", `Result\.(Ok)\{`)
++		decl := env.RegexpSearch("enum.go", `\t(Ok) \{`)
++		if diff := cmp.Diff(decl, env.FirstDefinition(use)); diff != "" {
++			t.Errorf("Ok definition mismatch (-want +got):\n%s", diff)
++		}
++
++		env.Rename(use, "Success")
++		text := env.BufferText("enum.go")
++		for _, want := range []string{"Success { Value int }", "case Success:", "Result.Success{Value: 1}"} {
++			if !strings.Contains(text, want) {
++				t.Errorf("renamed enum is missing %q:\n%s", want, text)
++			}
++		}
++		if text := env.BufferText("client/client.go"); !strings.Contains(text, "p.Result.Success{Value: 2}") {
++			t.Errorf("renamed imported enum variant is missing from client:\n%s", text)
 +		}
 +	})
 +}

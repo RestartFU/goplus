@@ -1,3 +1,7 @@
+// Copyright 2026 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Command enumvendor reapplies the first-class enum compatibility changes to
 // the x/tools packages in cmd/vendor after "go mod vendor" replaces them.
 package main
