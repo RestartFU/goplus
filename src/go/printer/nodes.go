@@ -1953,12 +1953,15 @@ func (p *printer) funcDecl(d *ast.FuncDecl) {
 
 func (p *printer) enumDecl(d *ast.EnumDecl) {
 	p.setComment(d.Doc)
-	p.setPos(d.Enum)
-	p.print(token.ENUM, blank)
+	p.setPos(d.Type)
+	p.print(token.TYPE, blank)
 	p.expr(d.Name)
 	if d.TypeParams != nil {
 		p.parameters(d.TypeParams, typeTParam)
 	}
+	p.print(blank)
+	p.setPos(d.Enum)
+	p.print(token.ENUM)
 	p.print(blank)
 	p.setPos(d.Lbrace)
 	p.print(token.LBRACE, indent, formfeed)
@@ -2010,7 +2013,7 @@ func declToken(decl ast.Decl) (tok token.Token) {
 	case *ast.FuncDecl:
 		tok = token.FUNC
 	case *ast.EnumDecl:
-		tok = token.ENUM
+		tok = token.TYPE
 	}
 	return
 }

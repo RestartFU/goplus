@@ -1013,6 +1013,7 @@ type (
 	// An EnumDecl node represents an algebraic enum declaration.
 	EnumDecl struct {
 		Doc        *CommentGroup // associated documentation; or nil
+		Type       token.Pos     // position of "type" keyword
 		Enum       token.Pos     // position of "enum" keyword
 		Name       *Ident        // enum name
 		TypeParams *FieldList    // type parameters; or nil
@@ -1037,7 +1038,7 @@ type (
 func (d *BadDecl) Pos() token.Pos  { return d.From }
 func (d *GenDecl) Pos() token.Pos  { return d.TokPos }
 func (d *FuncDecl) Pos() token.Pos { return d.Type.Pos() }
-func (d *EnumDecl) Pos() token.Pos { return d.Enum }
+func (d *EnumDecl) Pos() token.Pos { return d.Type }
 
 func (v *EnumVariant) Pos() token.Pos { return v.Name.Pos() }
 

@@ -1001,7 +1001,7 @@ func TestParseEnumDecl(t *testing.T) {
 	const src = `package p
 
 // Result reports success or failure.
-enum Result[T any] {
+type Result[T any] enum {
 	// Ok carries a value.
 	Ok {
 		value T
@@ -1080,7 +1080,7 @@ enum Result[T any] {
 }
 
 func TestParseEnumDuplicateVariant(t *testing.T) {
-	const src = "package p; enum E { A; A }"
+	const src = "package p; type E enum { A; A }"
 	_, err := ParseFile(token.NewFileSet(), "enum.go", src, DeclarationErrors)
 	if err == nil || !strings.Contains(err.Error(), "A redeclared") {
 		t.Fatalf("duplicate variant error = %v, want redeclaration error", err)
@@ -1090,12 +1090,16 @@ func TestParseEnumDuplicateVariant(t *testing.T) {
 func TestEnumIsContextualKeyword(t *testing.T) {
 	const src = `package p
 var enum = 1
-func f() {
-	enum := 2
-	enum++
-	_ = enum
-	enum Local { A }
+func f(enum string) string {
+	enum += "x"
+	{
+		enum := 2
+		enum++
+		_ = enum
+	}
+	type Local enum { A }
 	var _ Local = A{}
+	return enum
 }
 `
 	if _, err := ParseFile(token.NewFileSet(), "enum.go", src, DeclarationErrors); err != nil {
@@ -1105,8 +1109,8 @@ func f() {
 
 func TestEnumVariantsStayNamespacedInResolver(t *testing.T) {
 	const src = `package p
-enum E { A }
-enum F { A }
+type E enum { A }
+type F enum { A }
 type A int
 `
 	if _, err := ParseFile(token.NewFileSet(), "enum.go", src, DeclarationErrors); err != nil {

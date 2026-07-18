@@ -110,10 +110,10 @@ func TestSource(t *testing.T) {
 }
 
 func TestSourceEnum(t *testing.T) {
-	const src = "package p\nenum Result[T any]{Ok{value T};Err{err error};None;Empty{}}\n"
+	const src = "package p\ntype Result[T any] enum{Ok{value T};Err{err error};None;Empty{}}\n"
 	const want = `package p
 
-enum Result[T any] {
+type Result[T any] enum {
 	Ok { value T }
 	Err { err error }
 	None

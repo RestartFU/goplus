@@ -87,7 +87,7 @@ func TestFilterDuplicates(t *testing.T) {
 func TestFilterEnum(t *testing.T) {
 	const src = `package p
 
-enum Result {
+type Result enum {
 	Ok {
 		Value int
 		hidden int

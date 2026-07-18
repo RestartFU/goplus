@@ -221,7 +221,7 @@ index adb04cd..54281cb 100644
 +}
 +
 +func local() {
-+	enum Local { One; Two }
++	type Local enum { One; Two }
 +	var value Local
 +	switch value {
 +	case One:
@@ -260,7 +260,7 @@ index 0f08f47..769b772 100644
 +	Err { Message string }
 +}
 +
-+enum Option[T any] {
++type Option[T any] enum {
 +	Some { Value T }
 +	None
 +}

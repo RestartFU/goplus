@@ -4,7 +4,7 @@
 
 package enumlib
 
-enum Result {
+type Result enum {
 	Ok { Value int }
 	Err
 }
@@ -21,7 +21,7 @@ func (r Result) Or(zero int) int {
 
 func NewResult() Result { return Ok{Value: 7} }
 
-enum Option[T any] {
+type Option[T any] enum {
 	Some { Value T }
 	None
 }

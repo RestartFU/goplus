@@ -48,6 +48,16 @@ Methods belong to the enum type itself, never to an individual variant. A
 method that needs variant fields switches on its enum receiver and uses the
 case-narrowed receiver inside each arm.
 
+Enums use a contextual `enum` marker in a type declaration, so `enum` remains
+available as an ordinary identifier elsewhere:
+
+```go
+type Result[T any] enum {
+	Ok { Value T }
+	Err { Err error }
+}
+```
+
 Variants are namespaced by their enum when no target type is available:
 
 ```go

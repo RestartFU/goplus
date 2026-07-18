@@ -10,13 +10,13 @@ import "reflect"
 
 var enum = 1
 
-enum Result {
+type Result enum {
 	Ok { value int }
 	Err { err string }
 	None
 }
 
-enum Option[T any] {
+type Option[T any] enum {
 	Some { value T }
 	Nothing
 }
@@ -104,7 +104,7 @@ func main() {
 		panic("generic enum")
 	}
 
-	enum Local {
+	type Local enum {
 		Here { value int }
 		Gone
 	}

@@ -26,7 +26,7 @@ func checkEnumPackage(t *testing.T, src string) (*types.Package, error) {
 func TestEnumTypes(t *testing.T) {
 	const src = `package p
 
-enum Result {
+type Result enum {
 	Ok { value int }
 	Err { err error }
 	None
@@ -93,7 +93,7 @@ func makeResult() Result { return Result.Ok{value: 42} }
 
 func TestEnumVariantReceiverRejected(t *testing.T) {
 	const src = `package p
-enum Result { Ok { value int }; Err }
+type Result enum { Ok { value int }; Err }
 func (o Result.Ok) Value() int { return o.value }
 `
 	_, err := checkEnumPackage(t, src)
@@ -104,7 +104,7 @@ func (o Result.Ok) Value() int { return o.value }
 
 func TestEnumMethodVariantCollisionRejected(t *testing.T) {
 	const src = `package p
-enum Result { Ok }
+type Result enum { Ok }
 func (Result) Ok() {}
 `
 	_, err := checkEnumPackage(t, src)
@@ -115,7 +115,7 @@ func (Result) Ok() {}
 
 func TestEnumTypeSwitch(t *testing.T) {
 	const exhaustive = `package p
-enum Result { Ok { value int }; Err { err error }; None }
+type Result enum { Ok { value int }; Err { err error }; None }
 func inspect(r Result) int {
 	switch v := r.(type) {
 	case Ok: return v.value
@@ -131,7 +131,7 @@ func inspect(r Result) int {
 	}
 
 	const missing = `package p
-enum Result { Ok; Err; None }
+type Result enum { Ok; Err; None }
 func inspect(r Result) { switch r.(type) { case Ok: } }
 `
 	_, err := checkEnumPackage(t, missing)
@@ -140,7 +140,7 @@ func inspect(r Result) { switch r.(type) { case Ok: } }
 	}
 
 	const withDefault = `package p
-enum Result { Ok; Err }
+type Result enum { Ok; Err }
 func inspect(r Result) { switch r.(type) { case Ok:; default: } }
 `
 	if _, err := checkEnumPackage(t, withDefault); err != nil {
@@ -150,7 +150,7 @@ func inspect(r Result) { switch r.(type) { case Ok:; default: } }
 
 func TestEnumValueSwitchNarrowing(t *testing.T) {
 	const exhaustive = `package p
-enum Result { Ok { value int }; Err { err error }; None }
+type Result enum { Ok { value int }; Err { err error }; None }
 func inspect(result Result) int {
 	switch result {
 	case Ok: return result.value
@@ -166,7 +166,7 @@ func inspect(result Result) int {
 	}
 
 	const expressions = `package p
-enum Result { Ok; Err }
+type Result enum { Ok; Err }
 func makeResult() Result { return Result.Ok{} }
 type Holder struct { Result Result }
 func inspect(h Holder) {
@@ -179,7 +179,7 @@ func inspect(h Holder) {
 	}
 
 	const duplicate = `package p
-enum Result { Ok; Err }
+type Result enum { Ok; Err }
 func inspect(result Result) { switch result { case Ok:; case Ok:; case Err:; case nil: } }
 `
 	_, err := checkEnumPackage(t, duplicate)
@@ -190,21 +190,21 @@ func inspect(result Result) { switch result { case Ok:; case Ok:; case Err:; cas
 
 func TestEnumRejectsRecursiveVariants(t *testing.T) {
 	const direct = `package p
-enum E { V { next E.V } }
+type E enum { V { next E.V } }
 `
 	if _, err := checkEnumPackage(t, direct); err == nil || !strings.Contains(err.Error(), "invalid recursive type") {
 		t.Fatalf("direct recursive variant error = %v", err)
 	}
 
 	const mutual = `package p
-enum E { A { b E.B }; B { a E.A } }
+type E enum { A { b E.B }; B { a E.A } }
 `
 	if _, err := checkEnumPackage(t, mutual); err == nil || !strings.Contains(err.Error(), "invalid recursive type") {
 		t.Fatalf("mutually recursive variant error = %v", err)
 	}
 
 	const indirect = `package p
-enum E { V { parent E; next *E.V } }
+type E enum { V { parent E; next *E.V } }
 `
 	if _, err := checkEnumPackage(t, indirect); err != nil {
 		t.Fatalf("indirect recursive variant: %v", err)
@@ -213,7 +213,7 @@ enum E { V { parent E; next *E.V } }
 
 func TestEnumRejectsPointerVariant(t *testing.T) {
 	const src = `package p
-enum Result { Ok }
+type Result enum { Ok }
 type R = Result
 var _ R = &Result.Ok{}
 `
@@ -226,7 +226,7 @@ var _ R = &Result.Ok{}
 func TestGenericEnumTypes(t *testing.T) {
 	const src = `package p
 
-enum Option[T any] {
+type Option[T any] enum {
 	Some { value T }
 	None
 }
@@ -269,7 +269,7 @@ var _ Option[int] = Option.Some[int]{value: 1}
 
 func TestEnumVariantsRequireQualification(t *testing.T) {
 	const src = `package p
-enum Result { Ok }
+type Result enum { Ok }
 var inferred Result = Ok{}
 func f() Result { return Ok{} }
 var _ = Result.Ok{}
@@ -279,7 +279,7 @@ var _ = Result.Ok{}
 	}
 
 	const invalid = `package p
-enum Result { Ok }
+type Result enum { Ok }
 var _ = Ok{}
 `
 	_, err := checkEnumPackage(t, invalid)
@@ -290,7 +290,7 @@ var _ = Ok{}
 
 func TestDuplicateEnumVariant(t *testing.T) {
 	const src = `package p
-enum E { A; A }
+type E enum { A; A }
 `
 	_, err := checkEnumPackage(t, src)
 	if err == nil || !strings.Contains(err.Error(), "A redeclared") {
@@ -300,7 +300,7 @@ enum E { A; A }
 
 func TestEnumVariantVisibility(t *testing.T) {
 	const src = `package p
-enum E { Public; private }
+type E enum { Public; private }
 `
 	pkg, err := checkEnumPackage(t, src)
 	if err != nil {
@@ -317,7 +317,7 @@ enum E { Public; private }
 
 func TestGenericEnumInstantiationSeal(t *testing.T) {
 	const src = `package p
-enum Option[T any] { Some { Value T }; None }
+type Option[T any] enum { Some { Value T }; None }
 var _ Option[int] = Option.Some[string]{Value: "wrong"}
 `
 	if _, err := checkEnumPackage(t, src); err == nil || !strings.Contains(err.Error(), "cannot use") {
@@ -328,10 +328,10 @@ var _ Option[int] = Option.Some[string]{Value: "wrong"}
 func TestLocalEnumSeal(t *testing.T) {
 	const src = `package p
 func f() {
-	enum E { A }
+	type E enum { A }
 	var outer E = A{}
 	{
-		enum E { A }
+		type E enum { A }
 		var inner E = A{}
 		outer = inner
 	}
@@ -343,7 +343,7 @@ func f() {
 }
 
 func TestImportedEnumSwitchVariantVisibility(t *testing.T) {
-	pkg, err := checkEnumPackage(t, `package p; enum E { Public; private }`)
+	pkg, err := checkEnumPackage(t, `package p; type E enum { Public; private }`)
 	if err != nil {
 		t.Fatal(err)
 	}

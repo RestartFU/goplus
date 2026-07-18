@@ -13,7 +13,7 @@ import (
 func TestEnumSyntax(t *testing.T) {
 	const src = `package p
 
-enum Result[T any] {
+type Result[T any] enum {
 	Ok {
 		value T
 	}
@@ -76,12 +76,16 @@ enum Result[T any] {
 func TestEnumIsContextualKeyword(t *testing.T) {
 	const src = `package p
 var enum = 1
-func f() {
-	enum := 2
-	enum++
-	_ = enum
-	enum Local { A }
+func f(enum string) string {
+	enum += "x"
+	{
+		enum := 2
+		enum++
+		_ = enum
+	}
+	type Local enum { A }
 	var _ Local = A{}
+	return enum
 }
 `
 	if _, err := Parse(NewFileBase("enum.go"), strings.NewReader(src), nil, nil, 0); err != nil {

@@ -14,7 +14,7 @@ import (
 func TestWalkEnum(t *testing.T) {
 	const src = `package p
 
-enum Result[T any] {
+type Result[T any] enum {
 	Ok { value T }
 	None
 }

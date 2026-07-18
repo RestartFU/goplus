@@ -701,11 +701,14 @@ func (p *printer) printRawNode(n Node) {
 		}
 
 	case *EnumDecl:
-		p.print(_Enum, blank, n.Name)
+		if n.Group == nil {
+			p.print(_Type, blank)
+		}
+		p.print(n.Name)
 		if n.TParamList != nil {
 			p.printParameterList(n.TParamList, _Type)
 		}
-		p.print(blank, _Lbrace)
+		p.print(blank, _Enum, blank, _Lbrace)
 		if len(n.VariantList) > 0 {
 			p.print(newline, indent)
 			for _, variant := range n.VariantList {
@@ -848,7 +851,7 @@ func groupFor(d Decl) (token, *Group) {
 	case *FuncDecl:
 		return _Func, nil
 	case *EnumDecl:
-		return _Enum, nil
+		return _Type, d.Group
 	default:
 		panic("unreachable")
 	}

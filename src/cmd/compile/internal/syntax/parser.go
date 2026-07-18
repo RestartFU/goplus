@@ -327,7 +327,6 @@ const stopset uint64 = 1<<_Break |
 	1<<_Const |
 	1<<_Continue |
 	1<<_Defer |
-	1<<_Enum |
 	1<<_Fallthrough |
 	1<<_For |
 	1<<_Go |
@@ -360,7 +359,7 @@ func (p *parser) advance(followlist ...token) {
 		}
 	}
 
-	for !contains(followset, p.tok) && !(contains(followset, _Enum) && p.tok == _Name && p.lit == "enum") {
+	for !contains(followset, p.tok) {
 		if trace {
 			p.print("skip " + p.tok.String())
 		}
@@ -460,14 +459,6 @@ func (p *parser) fileOrNil() *File {
 				f.DeclList = append(f.DeclList, d)
 			}
 
-		case _Name:
-			if p.lit == "enum" {
-				p.next()
-				f.DeclList = append(f.DeclList, p.enumDecl(nil))
-				break
-			}
-			fallthrough
-
 		default:
 			if p.tok == _Lbrace && len(f.DeclList) > 0 && isEmptyFuncDecl(f.DeclList[len(f.DeclList)-1]) {
 				// opening { of function declaration on next line
@@ -475,7 +466,7 @@ func (p *parser) fileOrNil() *File {
 			} else {
 				p.syntaxError("non-declaration statement outside function body")
 			}
-			p.advance(_Import, _Const, _Type, _Enum, _Var, _Func)
+			p.advance(_Import, _Const, _Type, _Var, _Func)
 			continue
 		}
 
@@ -485,7 +476,7 @@ func (p *parser) fileOrNil() *File {
 
 		if p.tok != _EOF && !p.got(_Semi) {
 			p.syntaxError("after top level declaration")
-			p.advance(_Import, _Const, _Type, _Enum, _Var, _Func)
+			p.advance(_Import, _Const, _Type, _Var, _Func)
 		}
 	}
 	// p.tok == _EOF
@@ -668,6 +659,9 @@ func (p *parser) typeDecl(group *Group) Decl {
 				// d.Name "[" pname ptype ...
 				// d.Name "[" pname ptype "," ...
 				d.TParamList = p.paramList(pname, ptype, _Rbrack, true, false) // ptype may be nil
+				if p.tok == _Name && p.lit == "enum" {
+					return p.enumDecl(d)
+				}
 				d.Alias = p.gotAssign()
 				d.Type = p.typeOrNil()
 			} else {
@@ -684,6 +678,9 @@ func (p *parser) typeDecl(group *Group) Decl {
 			d.Type = p.arrayType(pos, nil)
 		}
 	} else {
+		if p.tok == _Name && p.lit == "enum" {
+			return p.enumDecl(d)
+		}
 		d.Alias = p.gotAssign()
 		d.Type = p.typeOrNil()
 	}
@@ -697,19 +694,20 @@ func (p *parser) typeDecl(group *Group) Decl {
 	return d
 }
 
-// EnumDecl = "enum" identifier [ TypeParams ] "{" { EnumVariant ";" } "}" .
-func (p *parser) enumDecl(_ *Group) Decl {
+// EnumDecl = "type" identifier [ TypeParams ] "enum" "{" { EnumVariant ";" } "}" .
+func (p *parser) enumDecl(header *TypeDecl) Decl {
 	if trace {
 		defer p.trace("enumDecl")()
 	}
 
-	d := new(EnumDecl)
-	d.pos = p.pos()
-	d.Pragma = p.takePragma()
-	d.Name = p.name()
-	if p.got(_Lbrack) {
-		d.TParamList = p.paramList(nil, nil, _Rbrack, true, false)
+	d := &EnumDecl{
+		Pragma:     header.Pragma,
+		Group:      header.Group,
+		Name:       header.Name,
+		TParamList: header.TParamList,
 	}
+	d.pos = header.pos
+	p.next()
 	p.want(_Lbrace)
 	p.list("enum declaration", _Semi, _Rbrace, func() bool {
 		if p.tok != _Name {
@@ -2654,19 +2652,6 @@ func (p *parser) stmtOrNil() Stmt {
 	// Most statements (assignments) start with an identifier;
 	// look for it first before doing anything more expensive.
 	if p.tok == _Name {
-		if p.lit == "enum" {
-			pos := p.pos()
-			name := NewName(pos, p.lit)
-			p.next()
-			if p.tok == _Name {
-				s := new(DeclStmt)
-				s.pos = pos
-				s.DeclList = []Decl{p.enumDecl(nil)}
-				return s
-			}
-			lhs := p.binaryExpr(p.pexpr(name, false), 0)
-			return p.simpleStmt(p.exprListFrom(lhs), 0)
-		}
 		p.clearPragma()
 		lhs := p.exprList()
 		if label, ok := lhs.(*Name); ok && p.tok == _Colon {
@@ -2685,8 +2670,6 @@ func (p *parser) stmtOrNil() Stmt {
 	case _Type:
 		return p.declStmt(p.typeDecl)
 
-	case _Enum:
-		return p.declStmt(p.enumDecl)
 	}
 
 	p.clearPragma()

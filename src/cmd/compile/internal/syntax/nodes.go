@@ -118,9 +118,10 @@ type (
 		decl
 	}
 
-	// enum Name[T, ...] { VariantList[0]; VariantList[1]; ... }
+	// type Name[T, ...] enum { VariantList[0]; VariantList[1]; ... }
 	EnumDecl struct {
 		Pragma      Pragma
+		Group       *Group
 		Name        *Name
 		TParamList  []*Field // nil means no type parameters
 		VariantList []*EnumVariant
