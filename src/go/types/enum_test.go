@@ -241,6 +241,17 @@ var _ R = &Result.Ok{}
 	}
 }
 
+func TestEnumRejectsEmbeddedVariant(t *testing.T) {
+	const src = `package p
+type Inner enum { Public }
+type Outer enum { Wrap { Inner.Public } }
+`
+	_, err := checkEnumPackage(t, src)
+	if err == nil || !strings.Contains(err.Error(), "cannot anonymously embed enum variant") {
+		t.Fatalf("embedded enum variant error = %v", err)
+	}
+}
+
 func TestGenericEnumTypes(t *testing.T) {
 	const src = `package p
 

@@ -623,6 +623,12 @@ func (check *Checker) enumDecl(info *enumDeclInfo) {
 	for i, variant := range decl.Variants {
 		styp := new(Struct)
 		check.structType(styp, &ast.StructType{Fields: variant.Fields})
+		for i := 0; i < styp.NumFields(); i++ {
+			field := styp.Field(i)
+			if field.Embedded() && isEnumVariantType(field.Type()) {
+				check.errorf(field, InvalidPtrEmbed, "enum variant %s cannot anonymously embed enum variant %s", variant.Name, field.Type())
+			}
+		}
 		baseTParams := named[0].TypeParams().list()
 		variantTParams := named[i+1].TypeParams().list()
 		if len(baseTParams) == 0 {
@@ -662,6 +668,18 @@ func (check *Checker) enumDecl(info *enumDeclInfo) {
 	for _, obj := range info.objects {
 		check.collectMethods(obj)
 	}
+}
+
+func isEnumVariantType(typ Type) bool {
+	if ptr, _ := Unalias(typ).(*Pointer); ptr != nil {
+		typ = ptr.Elem()
+	}
+	named, _ := Unalias(typ).(*Named)
+	if named == nil {
+		return false
+	}
+	enumType := named.EnumType()
+	return enumType != nil && named.Origin() != enumType.Origin()
 }
 
 func enumMarkerParams(pos token.Pos, pkg *Package, tparams []*TypeParam) *Tuple {
