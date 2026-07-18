@@ -290,3 +290,47 @@ enum E { Public; private }
 		t.Fatalf("private variant ID = %q, want p.E.private", got)
 	}
 }
+
+func TestGenericEnumInstantiationSeal(t *testing.T) {
+	const src = `package p
+enum Option[T any] { Some { Value T }; None }
+var _ Option[int] = Option.Some[string]{Value: "wrong"}
+`
+	if _, err := typecheck(src, nil, nil); err == nil || !strings.Contains(err.Error(), "cannot use") {
+		t.Fatalf("cross-instantiation assignment error = %v", err)
+	}
+}
+
+func TestLocalEnumSeal(t *testing.T) {
+	const src = `package p
+func f() {
+	enum E { A }
+	var outer E = A{}
+	{
+		enum E { A }
+		var inner E = A{}
+		outer = inner
+	}
+}
+`
+	if _, err := typecheck(src, nil, nil); err == nil || !strings.Contains(err.Error(), "cannot use") {
+		t.Fatalf("same-named local enum assignment error = %v", err)
+	}
+}
+
+func TestImportedEnumSwitchVariantVisibility(t *testing.T) {
+	pkg, err := typecheck(`package p; enum E { Public; private }`, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, switchStmt := range []string{
+		`switch x { case private: default: }`,
+		`switch x.(type) { case private: default: }`,
+	} {
+		conf := Config{Importer: testImporter{"p": pkg}}
+		_, err := typecheck("package q; import \"p\"; func f(x p.E) { "+switchStmt+" }", &conf, nil)
+		if err == nil || !strings.Contains(err.Error(), "unexported enum variant") {
+			t.Errorf("%s: visibility error = %v", switchStmt, err)
+		}
+	}
+}

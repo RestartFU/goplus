@@ -528,7 +528,10 @@ func (check *Checker) enumDecl(info *enumDeclInfo) {
 	}
 
 	markerName := ".enum." + decl.Name.Value
-	markerSig := NewSignatureType(nil, nil, nil, nil, nil, false)
+	if named[0].Obj().Parent() != check.pkg.Scope() {
+		markerName += "." + decl.Name.Pos().String()
+	}
+	markerSig := NewSignatureType(nil, nil, nil, enumMarkerParams(decl.Name.Pos(), check.pkg, named[0].TypeParams().list()), nil, false)
 	marker := NewFunc(decl.Name.Pos(), check.pkg, markerName, markerSig)
 	named[0].fromRHS = NewInterfaceType([]*Func{marker}, nil)
 	einfo := &enumInfo{parent: named[0], variants: named[1:]}
@@ -565,7 +568,7 @@ func (check *Checker) enumDecl(info *enumDeclInfo) {
 			recvType = check.instance(variant.Name.Pos(), named[i+1], targs, nil, check.context())
 		}
 		recv := newVar(RecvVar, variant.Name.Pos(), check.pkg, "", recvType)
-		sig := NewSignatureType(recv, rparams, nil, nil, nil, false)
+		sig := NewSignatureType(recv, rparams, nil, enumMarkerParams(variant.Name.Pos(), check.pkg, rparams), nil, false)
 		named[i+1].methods = []*Func{NewFunc(variant.Name.Pos(), check.pkg, markerName, sig)}
 	}
 	for _, variant := range named[1:] {
@@ -578,6 +581,17 @@ func (check *Checker) enumDecl(info *enumDeclInfo) {
 	for _, obj := range info.objects {
 		check.collectMethods(obj)
 	}
+}
+
+func enumMarkerParams(pos syntax.Pos, pkg *Package, tparams []*TypeParam) *Tuple {
+	if len(tparams) == 0 {
+		return nil
+	}
+	params := make([]*Var, len(tparams))
+	for i, tparam := range tparams {
+		params[i] = NewParam(pos, pkg, "", tparam)
+	}
+	return NewTuple(params...)
 }
 
 // collectEnumTypeParams declares the enum's type parameters and creates a

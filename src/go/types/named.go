@@ -449,7 +449,7 @@ func (t *Named) EnumType() *Named {
 // It returns nil when t is not an enum type.
 func (t *Named) EnumVariants() []*Named {
 	orig := t.Origin()
-	if orig.enumMarker() == "" {
+	if orig.enumInfo == nil && orig.enumMarker() == "" {
 		return nil
 	}
 	var variants []*Named

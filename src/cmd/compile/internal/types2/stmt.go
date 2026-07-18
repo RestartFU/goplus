@@ -318,9 +318,14 @@ L:
 			if x != nil && check.isEnumType(x.typ()) {
 				if id, _ := e.(*syntax.Name); id != nil {
 					if variant := enumVariant(x.typ(), id.Value); variant != nil {
-						T = variant
-						check.recordUse(id, variant.Obj())
-						check.recordTypeAndValue(id, typexpr, variant, nil)
+						if obj := variant.Obj(); obj.Pkg() != check.pkg && !obj.Exported() {
+							check.errorf(id, UnexportedName, "cannot refer to unexported enum variant %s", variant)
+							T = Typ[Invalid]
+						} else {
+							T = variant
+							check.recordUse(id, obj)
+							check.recordTypeAndValue(id, typexpr, variant, nil)
+						}
 					}
 				}
 			}
@@ -840,9 +845,14 @@ Next:
 		} else {
 			if id, _ := e.(*syntax.Name); id != nil {
 				if variant := enumVariant(x.typ(), id.Value); variant != nil {
-					T = variant
-					check.recordUse(id, variant.Obj())
-					check.recordTypeAndValue(id, typexpr, variant, nil)
+					if obj := variant.Obj(); obj.Pkg() != check.pkg && !obj.Exported() {
+						check.errorf(id, UnexportedName, "cannot refer to unexported enum variant %s", variant)
+						T = Typ[Invalid]
+					} else {
+						T = variant
+						check.recordUse(id, obj)
+						check.recordTypeAndValue(id, typexpr, variant, nil)
+					}
 				}
 			}
 			if T == nil {

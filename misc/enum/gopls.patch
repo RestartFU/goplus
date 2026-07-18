@@ -1,9 +1,9 @@
 diff --git a/internal/analysis/fillswitch/enum_test.go b/internal/analysis/fillswitch/enum_test.go
 new file mode 100644
-index 0000000..6bc4be2
+index 0000000..2241e35
 --- /dev/null
 +++ b/internal/analysis/fillswitch/enum_test.go
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,118 @@
 +// Copyright 2026 The Go Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style
 +// license that can be found in the LICENSE file.
@@ -11,6 +11,7 @@ index 0000000..6bc4be2
 +package fillswitch_test
 +
 +import (
++	"fmt"
 +	"go/ast"
 +	"go/parser"
 +	"go/token"
@@ -21,6 +22,15 @@ index 0000000..6bc4be2
 +	"golang.org/x/tools/gopls/internal/analysis/fillswitch"
 +)
 +
++type testImporter map[string]*types.Package
++
++func (m testImporter) Import(path string) (*types.Package, error) {
++	if pkg := m[path]; pkg != nil {
++		return pkg, nil
++	}
++	return nil, fmt.Errorf("package %q not found", path)
++}
++
 +func TestEnum(t *testing.T) {
 +	const src = `package p
 +
@@ -29,7 +39,7 @@ index 0000000..6bc4be2
 +	None
 +}
 +
-+	func use(option Option[string]) {
++func use(option Option[string]) {
 +	switch option {
 +	case Some:
 +		_ = option.Value
@@ -67,8 +77,53 @@ index 0000000..6bc4be2
 +		t.Fatalf("enum switch edit does not preserve closing-brace indentation: %q", text)
 +	}
 +}
++
++func TestEnumExistingDefault(t *testing.T) {
++	fset := token.NewFileSet()
++	parse := func(name, src string) *ast.File {
++		file, err := parser.ParseFile(fset, name, src, 0)
++		if err != nil {
++			t.Fatal(err)
++		}
++		return file
++	}
++
++	decl := parse("enum.go", `package p; enum E { A; B; private }`)
++	pkg, err := new(types.Config).Check("p", fset, []*ast.File{decl}, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	use := parse("use.go", `package q
++import "p"
++func use(value p.E) {
++	switch value {
++	case A:
++	default:
++	}
++}`)
++	info := &types.Info{
++		Types:      make(map[ast.Expr]types.TypeAndValue),
++		Defs:       make(map[*ast.Ident]types.Object),
++		Uses:       make(map[*ast.Ident]types.Object),
++		Implicits:  make(map[ast.Node]types.Object),
++		Scopes:     make(map[ast.Node]*types.Scope),
++		Selections: make(map[*ast.SelectorExpr]*types.Selection),
++	}
++	consumer, err := (&types.Config{Importer: testImporter{"p": pkg}}).Check("q", fset, []*ast.File{use}, info)
++	if err != nil {
++		t.Fatal(err)
++	}
++	diagnostics := fillswitch.Diagnose(use, token.NoPos, token.NoPos, consumer, info)
++	if len(diagnostics) != 1 {
++		t.Fatalf("got %d diagnostics, want 1", len(diagnostics))
++	}
++	text := string(diagnostics[0].SuggestedFixes[0].TextEdits[0].NewText)
++	if !strings.Contains(text, "case B:") || strings.Contains(text, "default:") {
++		t.Fatalf("enum switch edit = %q, want B without duplicate default", text)
++	}
++}
 diff --git a/internal/analysis/fillswitch/fillswitch.go b/internal/analysis/fillswitch/fillswitch.go
-index 7b1a7e8..c7544b9 100644
+index 7b1a7e8..8e17fff 100644
 --- a/internal/analysis/fillswitch/fillswitch.go
 +++ b/internal/analysis/fillswitch/fillswitch.go
 @@ -10,6 +10,7 @@ import (
@@ -106,7 +161,7 @@ index 7b1a7e8..c7544b9 100644
  
  	existingCases := caseConsts(stmt.Body, info)
  	// Gather accessible named constants of the same type as the switch value.
-@@ -186,6 +200,88 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
+@@ -186,6 +200,92 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
  	}
  }
  
@@ -118,8 +173,12 @@ index 7b1a7e8..c7544b9 100644
 +
 +	var existing []types.Type
 +	hasNil := false
++	hasDefault := false
 +	for _, stmt := range body.List {
 +		clause := stmt.(*ast.CaseClause)
++		if clause.List == nil {
++			hasDefault = true
++		}
 +		for _, expr := range clause.List {
 +			if id, ok := expr.(*ast.Ident); ok {
 +				if _, ok := info.ObjectOf(id).(*types.Nil); ok {
@@ -164,7 +223,7 @@ index 7b1a7e8..c7544b9 100644
 +		fmt.Fprintf(&buf, "case %s:\n", name)
 +	}
 +
-+	if inaccessible {
++	if inaccessible && !hasDefault {
 +		if buf.Len() > 0 {
 +			buf.WriteByte('\t')
 +		}
