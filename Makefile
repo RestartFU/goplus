@@ -14,12 +14,29 @@ install: build
 	test -x bin/go
 	test -x bin/gofmt
 	test -f VERSION.cache
-	install -d "$(DESTDIR)$(INSTALL_GOROOT)"
-	cp -R $(GOROOT_DIRS) "$(DESTDIR)$(INSTALL_GOROOT)/"
-	install -d "$(DESTDIR)$(INSTALL_GOROOT)/pkg"
-	cp -R pkg/include pkg/tool "$(DESTDIR)$(INSTALL_GOROOT)/pkg/"
-	install -m 0644 go.env "$(DESTDIR)$(INSTALL_GOROOT)/go.env"
-	install -m 0644 VERSION.cache "$(DESTDIR)$(INSTALL_GOROOT)/VERSION"
+	set -eu; \
+	target="$(DESTDIR)$(INSTALL_GOROOT)"; \
+	parent=$$(dirname "$$target"); \
+	install -d "$$parent"; \
+	stage=$$(mktemp -d "$$parent/.go-install.XXXXXX"); \
+	backup=; \
+	trap 'test -z "$$stage" || rm -rf -- "$$stage"' EXIT HUP INT TERM; \
+	cp -R $(GOROOT_DIRS) "$$stage/"; \
+	install -d "$$stage/pkg"; \
+	cp -R pkg/include pkg/tool "$$stage/pkg/"; \
+	install -m 0644 go.env "$$stage/go.env"; \
+	install -m 0644 VERSION.cache "$$stage/VERSION"; \
+	if test -e "$$target" || test -L "$$target"; then \
+		backup="$$target.backup.$$$$"; \
+		test ! -e "$$backup"; \
+		mv -- "$$target" "$$backup"; \
+	fi; \
+	if ! mv -- "$$stage" "$$target"; then \
+		test -z "$$backup" || mv -- "$$backup" "$$target"; \
+		exit 1; \
+	fi; \
+	stage=; \
+	test -z "$$backup" || rm -rf -- "$$backup"
 	install -d "$(DESTDIR)$(BINDIR)"
 	ln -sfn "$(INSTALL_GOROOT)/bin/go" "$(DESTDIR)$(BINDIR)/go"
 	ln -sfn "$(INSTALL_GOROOT)/bin/gofmt" "$(DESTDIR)$(BINDIR)/gofmt"
