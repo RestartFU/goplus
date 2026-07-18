@@ -4,7 +4,7 @@
 
 package enumlib
 
-enum Option[T any] {
+type Option[T any] enum {
 	Some { Value T }
 	None
 	hidden
