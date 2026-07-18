@@ -248,7 +248,7 @@ diff --git a/internal/gcimporter/gcimporter_test.go b/internal/gcimporter/gcimpo
 index 0f08f47..769b772 100644
 --- a/internal/gcimporter/gcimporter_test.go
 +++ b/internal/gcimporter/gcimporter_test.go
-@@ -771,6 +771,126 @@ func TestIssue57015(t *testing.T) {
+@@ -771,6 +771,130 @@ func TestIssue57015(t *testing.T) {
  	compileAndImportPkg(t, "issue57015")
  }
  
@@ -259,6 +259,7 @@ index 0f08f47..769b772 100644
 +	Ok { Value int }
 +	Err { Message string }
 +}
++type Success = Result.Ok
 +
 +type Option[T any] enum {
 +	Some { Value T }
@@ -291,6 +292,9 @@ index 0f08f47..769b772 100644
 +		if named.EnumType() == nil {
 +			t.Errorf("%s lost enum metadata; underlying=%s methods=%d", name, named.Underlying(), named.NumMethods())
 +		}
++	}
++	if variants := pkg2.Scope().Lookup("Result").Type().(*types.Named).EnumVariants(); len(variants) != 2 {
++		t.Fatalf("Result has %d variants after shallow import, want 2", len(variants))
 +	}
 +
 +	const consumer = `package q

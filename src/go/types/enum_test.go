@@ -362,3 +362,24 @@ func TestImportedEnumSwitchVariantVisibility(t *testing.T) {
 		}
 	}
 }
+
+func TestImportedPrivateVariantSelectorVisibility(t *testing.T) {
+	pkg, err := checkEnumPackage(t, `package p; type E enum { Public; private }`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, src := range []string{
+		`package q; import "p"; type Alias = p.E; var _ = Alias.private{}`,
+		`package q; import . "p"; var _ = E.private{}`,
+	} {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "consumer.go", src, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatal(err)
+		}
+		conf := types.Config{Importer: testImporter{"p": pkg}}
+		if _, err := conf.Check("q", fset, []*ast.File{file}, nil); err == nil || !strings.Contains(err.Error(), "unexported enum variant") {
+			t.Errorf("%s: visibility error = %v", src, err)
+		}
+	}
+}

@@ -458,19 +458,25 @@ func (t *Named) EnumVariants() []*Named {
 	}
 	if variants == nil && orig.obj.pkg != nil {
 		marker := ".enum." + orig.obj.name
+		seen := make(map[*Named]bool)
 		for _, name := range orig.obj.pkg.Scope().Names() {
 			obj, _ := orig.obj.pkg.Scope().Lookup(name).(*TypeName)
-			if obj == nil {
+			if obj == nil || obj.IsAlias() {
 				continue
 			}
 			variant, _ := Unalias(obj.Type()).(*Named)
-			if variant == nil || variant.Origin() == orig {
+			if variant == nil {
 				continue
 			}
-			for i := range variant.Origin().NumMethods() {
-				method := variant.Origin().Method(i)
+			variant = variant.Origin()
+			if variant == orig || seen[variant] {
+				continue
+			}
+			for i := range variant.NumMethods() {
+				method := variant.Method(i)
 				if method.name == marker && method.pkg == orig.obj.pkg {
-					variants = append(variants, variant.Origin())
+					variants = append(variants, variant)
+					seen[variant] = true
 					break
 				}
 			}

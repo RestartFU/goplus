@@ -700,6 +700,9 @@ func (check *Checker) selector(x *operand, e *ast.SelectorExpr, wantType bool) {
 		obj := check.lookup(ident.Name)
 		if tname, _ := obj.(*TypeName); tname != nil && tname.typ != nil {
 			if variant := enumVariant(tname.typ, sel); variant != nil {
+				if variant.Obj().Pkg() != check.pkg && !variant.Obj().Exported() {
+					check.errorf(e.Sel, UnexportedName, "cannot refer to unexported enum variant %s", variant)
+				}
 				check.recordUse(ident, tname)
 				check.recordUse(e.Sel, variant.Obj())
 				x.mode_ = typexpr

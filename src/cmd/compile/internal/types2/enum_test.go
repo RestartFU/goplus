@@ -345,3 +345,19 @@ func TestImportedEnumSwitchVariantVisibility(t *testing.T) {
 		}
 	}
 }
+
+func TestImportedPrivateVariantSelectorVisibility(t *testing.T) {
+	pkg, err := typecheck(`package p; type E enum { Public; private }`, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, src := range []string{
+		`package q; import "p"; type Alias = p.E; var _ = Alias.private{}`,
+		`package q; import . "p"; var _ = E.private{}`,
+	} {
+		conf := Config{Importer: testImporter{"p": pkg}}
+		if _, err := typecheck(src, &conf, nil); err == nil || !strings.Contains(err.Error(), "unexported enum variant") {
+			t.Errorf("%s: visibility error = %v", src, err)
+		}
+	}
+}
