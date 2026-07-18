@@ -1,5 +1,5 @@
 diff --git a/go/ast/edge/edge.go b/go/ast/edge/edge.go
-index 8dc4dd1502..da7bfae61d 100644
+index 8dc4dd1..da7bfae 100644
 --- a/go/ast/edge/edge.go
 +++ b/go/ast/edge/edge.go
 @@ -165,6 +165,14 @@ const (
@@ -31,7 +31,7 @@ index 8dc4dd1502..da7bfae61d 100644
 +	EnumVariant_Name:      info[*ast.EnumVariant]("Name"),
  }
 diff --git a/go/ast/inspector/typeof.go b/go/ast/inspector/typeof.go
-index 9852331a3d..8fed1a5f6a 100644
+index 9852331..8fed1a5 100644
 --- a/go/ast/inspector/typeof.go
 +++ b/go/ast/inspector/typeof.go
 @@ -71,6 +71,8 @@ const (
@@ -55,7 +55,7 @@ index 9852331a3d..8fed1a5f6a 100644
  	return 0
  }
 diff --git a/go/ast/inspector/walk.go b/go/ast/inspector/walk.go
-index 5f1c93c8a7..2944e39c55 100644
+index 5f1c93c..2944e39 100644
 --- a/go/ast/inspector/walk.go
 +++ b/go/ast/inspector/walk.go
 @@ -309,6 +309,28 @@ func walk(v *visitor, ek edge.Kind, index int, node ast.Node) {
@@ -88,7 +88,7 @@ index 5f1c93c8a7..2944e39c55 100644
  		if n.Doc != nil {
  			walk(v, edge.FuncDecl_Doc, -1, n.Doc)
 diff --git a/go/cfg/builder.go b/go/cfg/builder.go
-index f16cd42309..305aabe2cd 100644
+index f16cd42..305aabe 100644
 --- a/go/cfg/builder.go
 +++ b/go/cfg/builder.go
 @@ -53,7 +53,10 @@ start:
@@ -104,7 +104,7 @@ index f16cd42309..305aabe2cd 100644
  			for _, spec := range d.Specs {
  				if spec, ok := spec.(*ast.ValueSpec); ok {
 diff --git a/go/ssa/builder.go b/go/ssa/builder.go
-index 242074925c..c900317dbb 100644
+index 2420749..c900317 100644
 --- a/go/ssa/builder.go
 +++ b/go/ssa/builder.go
 @@ -1432,6 +1432,13 @@ func (b *builder) compLit(fn *Function, addr Value, e *ast.CompositeLit, isZero
@@ -193,7 +193,7 @@ index 242074925c..c900317dbb 100644
  			for _, spec := range d.Specs {
  				if vs, ok := spec.(*ast.ValueSpec); ok {
 diff --git a/go/ssa/builder_test.go b/go/ssa/builder_test.go
-index adb04cde7f..54281cb0f7 100644
+index adb04cd..54281cb 100644
 --- a/go/ssa/builder_test.go
 +++ b/go/ssa/builder_test.go
 @@ -34,6 +34,47 @@ import (
@@ -245,10 +245,10 @@ index adb04cde7f..54281cb0f7 100644
  // functions with no code for the external portions, but are otherwise ok.
  func TestBuildPackage(t *testing.T) {
 diff --git a/internal/gcimporter/gcimporter_test.go b/internal/gcimporter/gcimporter_test.go
-index 0f08f477fc..32b212eb84 100644
+index 0f08f47..769b772 100644
 --- a/internal/gcimporter/gcimporter_test.go
 +++ b/internal/gcimporter/gcimporter_test.go
-@@ -771,6 +771,124 @@ func TestIssue57015(t *testing.T) {
+@@ -771,6 +771,126 @@ func TestIssue57015(t *testing.T) {
  	compileAndImportPkg(t, "issue57015")
  }
  
@@ -282,7 +282,7 @@ index 0f08f477fc..32b212eb84 100644
 +	if err != nil {
 +		t.Fatal(err)
 +	}
-+	for _, name := range []string{"Result", "Ok", "Err", "Option", "Some", "None"} {
++	for _, name := range []string{"Result", "Result.Ok", "Result.Err", "Option", "Option.Some", "Option.None"} {
 +		obj, _ := pkg2.Scope().Lookup(name).(*types.TypeName)
 +		if obj == nil {
 +			t.Fatalf("missing %s", name)
@@ -295,11 +295,13 @@ index 0f08f477fc..32b212eb84 100644
 +
 +	const consumer = `package q
 +import "p"
++var _ p.Result = p.Result.Ok{}
++var _ p.Option[int] = p.Option.Some[int]{}
 +func use(r p.Result) {
 +	switch r {
-+	case p.Ok:
++	case Ok:
 +		_ = r.Value
-+	case p.Err:
++	case Err:
 +		_ = r.Message
 +	case nil:
 +	}
@@ -374,7 +376,7 @@ index 0f08f477fc..32b212eb84 100644
  // containing type errors.
  //
 diff --git a/internal/gcimporter/iexport.go b/internal/gcimporter/iexport.go
-index 4c9450f4ee..599c571dca 100644
+index 4c9450f..599c571 100644
 --- a/internal/gcimporter/iexport.go
 +++ b/internal/gcimporter/iexport.go
 @@ -85,6 +85,7 @@
@@ -410,7 +412,7 @@ index 4c9450f4ee..599c571dca 100644
  		}
  
 diff --git a/internal/gcimporter/iexport_common_test.go b/internal/gcimporter/iexport_common_test.go
-index 00dc2ffd5d..1bd8427ae4 100644
+index 00dc2ff..1bd8427 100644
 --- a/internal/gcimporter/iexport_common_test.go
 +++ b/internal/gcimporter/iexport_common_test.go
 @@ -9,4 +9,4 @@ package gcimporter
@@ -420,7 +422,7 @@ index 00dc2ffd5d..1bd8427ae4 100644
 -const IExportVersion = iexportVersionGenerics
 +const IExportVersion = iexportVersion
 diff --git a/internal/gcimporter/iimport.go b/internal/gcimporter/iimport.go
-index 1ee4e93549..0b73f6f49a 100644
+index 1ee4e93..0b73f6f 100644
 --- a/internal/gcimporter/iimport.go
 +++ b/internal/gcimporter/iimport.go
 @@ -52,9 +52,10 @@ const (
@@ -459,7 +461,7 @@ index 1ee4e93549..0b73f6f49a 100644
  				named.AddMethod(types.NewFunc(mpos, pkg, mname, msig))
  			}
 diff --git a/internal/refactor/inline/calleefx.go b/internal/refactor/inline/calleefx.go
-index 001bf61e93..631d5a3347 100644
+index 001bf61..631d5a3 100644
 --- a/internal/refactor/inline/calleefx.go
 +++ b/internal/refactor/inline/calleefx.go
 @@ -228,7 +228,10 @@ func calleefx(info *types.Info, body *ast.BlockStmt, paramInfos map[*types.Var]*
@@ -475,7 +477,7 @@ index 001bf61e93..631d5a3347 100644
  				switch spec := spec.(type) {
  				case *ast.ValueSpec:
 diff --git a/internal/refactor/inline/inline.go b/internal/refactor/inline/inline.go
-index cf4c587176..7b2a42d4df 100644
+index cf4c587..7b2a42d 100644
 --- a/internal/refactor/inline/inline.go
 +++ b/internal/refactor/inline/inline.go
 @@ -3139,14 +3139,22 @@ func declares(stmts []ast.Stmt) map[string]bool {
@@ -509,7 +511,7 @@ index cf4c587176..7b2a42d4df 100644
  			}
  
 diff --git a/internal/typesinternal/element.go b/internal/typesinternal/element.go
-index 5fe4d8abcb..a5c26ad07d 100644
+index 5fe4d8a..a5c26ad 100644
 --- a/internal/typesinternal/element.go
 +++ b/internal/typesinternal/element.go
 @@ -37,6 +37,12 @@ func ForEachElement(rtypes *typeutil.Map, msets *typeutil.MethodSetCache, T type
@@ -526,7 +528,7 @@ index 5fe4d8abcb..a5c26ad07d 100644
  			// but, as noted in golang.org/cl/65450043,
  			// the Signature.Recv field is ignored by
 diff --git a/internal/typesinternal/element_test.go b/internal/typesinternal/element_test.go
-index 7d360db3d0..962d1ac55b 100644
+index 7d360db..962d1ac 100644
 --- a/internal/typesinternal/element_test.go
 +++ b/internal/typesinternal/element_test.go
 @@ -30,6 +30,7 @@ type C = T
@@ -547,7 +549,7 @@ index 7d360db3d0..962d1ac55b 100644
  		// alias type
  		{"D", []string{"int"}},
 diff --git a/refactor/satisfy/find.go b/refactor/satisfy/find.go
-index 3d21ce6d26..e76aebef8f 100644
+index 3d21ce6..e76aebe 100644
 --- a/refactor/satisfy/find.go
 +++ b/refactor/satisfy/find.go
 @@ -508,7 +508,10 @@ func (f *Finder) stmt(s ast.Stmt) {

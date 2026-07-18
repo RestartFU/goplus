@@ -286,3 +286,20 @@ enum E { A; A }
 		t.Fatalf("duplicate variant error = %v, want redeclaration error", err)
 	}
 }
+
+func TestEnumVariantVisibility(t *testing.T) {
+	const src = `package p
+enum E { Public; private }
+`
+	pkg, err := checkEnumPackage(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	variants := pkg.Scope().Lookup("E").Type().(*types.Named).EnumVariants()
+	if !variants[0].Obj().Exported() || variants[1].Obj().Exported() {
+		t.Fatalf("variant visibility: Public=%v private=%v", variants[0].Obj().Exported(), variants[1].Obj().Exported())
+	}
+	if got := variants[1].Obj().Id(); got != "p.E.private" {
+		t.Fatalf("private variant ID = %q, want p.E.private", got)
+	}
+}

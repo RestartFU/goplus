@@ -117,6 +117,9 @@ func (check *Checker) compositeLit(U Type, x *operand, e *syntax.CompositeLit, h
 				context = hint
 			}
 			if variant := enumVariant(context, id.Value); variant != nil {
+				if variant.Obj().Pkg() != check.pkg && !variant.Obj().Exported() {
+					check.errorf(id, UnexportedName, "cannot refer to unexported enum variant %s", variant)
+				}
 				typ = variant
 				base = typ
 				check.recordUse(id, variant.Obj())

@@ -1,6 +1,6 @@
 diff --git a/internal/analysis/fillswitch/enum_test.go b/internal/analysis/fillswitch/enum_test.go
 new file mode 100644
-index 0000000000..e30c66e07c
+index 0000000..6bc4be2
 --- /dev/null
 +++ b/internal/analysis/fillswitch/enum_test.go
 @@ -0,0 +1,63 @@
@@ -29,9 +29,9 @@ index 0000000000..e30c66e07c
 +	None
 +}
 +
-+func use(option Option[string]) {
++	func use(option Option[string]) {
 +	switch option {
-+	case Some[string]:
++	case Some:
 +		_ = option.Value
 +	}
 +}
@@ -60,7 +60,7 @@ index 0000000000..e30c66e07c
 +		t.Fatalf("got %d edits, want 1", len(fix.TextEdits))
 +	}
 +	text := string(fix.TextEdits[0].NewText)
-+	if !strings.Contains(text, "case None[string]:") || !strings.Contains(text, "case nil:") || strings.Contains(text, "case Some[string]:") {
++	if !strings.Contains(text, "case None:") || !strings.Contains(text, "case nil:") || strings.Contains(text, "case Some:") {
 +		t.Fatalf("enum switch edit = %q", text)
 +	}
 +	if !strings.HasSuffix(text, "\t") {
@@ -68,10 +68,18 @@ index 0000000000..e30c66e07c
 +	}
 +}
 diff --git a/internal/analysis/fillswitch/fillswitch.go b/internal/analysis/fillswitch/fillswitch.go
-index 7b1a7e8cbe..0c9123b896 100644
+index 7b1a7e8..15d9c88 100644
 --- a/internal/analysis/fillswitch/fillswitch.go
 +++ b/internal/analysis/fillswitch/fillswitch.go
-@@ -59,6 +59,16 @@ func suggestedFixTypeSwitch(stmt *ast.TypeSwitchStmt, pkg *types.Package, info *
+@@ -10,6 +10,7 @@ import (
+ 	"go/ast"
+ 	"go/token"
+ 	"go/types"
++	"strings"
+ 
+ 	"golang.org/x/tools/go/analysis"
+ 	"golang.org/x/tools/internal/typesinternal"
+@@ -59,6 +60,16 @@ func suggestedFixTypeSwitch(stmt *ast.TypeSwitchStmt, pkg *types.Package, info *
  	if namedType == nil {
  		return nil
  	}
@@ -88,7 +96,7 @@ index 7b1a7e8cbe..0c9123b896 100644
  
  	existingCases := caseTypes(stmt.Body, info)
  	// Gather accessible package-level concrete types
-@@ -144,6 +154,9 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
+@@ -144,6 +155,9 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
  	if !ok {
  		return nil
  	}
@@ -98,7 +106,7 @@ index 7b1a7e8cbe..0c9123b896 100644
  
  	existingCases := caseConsts(stmt.Body, info)
  	// Gather accessible named constants of the same type as the switch value.
-@@ -186,6 +199,84 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
+@@ -186,6 +200,87 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
  	}
  }
  
@@ -136,7 +144,6 @@ index 7b1a7e8cbe..0c9123b896 100644
 +
 +	var buf bytes.Buffer
 +	inaccessible := false
-+	qualifier := typesinternal.NameRelativeTo(pkg)
 +	for _, variant := range variants {
 +		if covered(variant) {
 +			continue
@@ -149,7 +156,11 @@ index 7b1a7e8cbe..0c9123b896 100644
 +		if buf.Len() > 0 {
 +			buf.WriteByte('\t')
 +		}
-+		fmt.Fprintf(&buf, "case %s:\n", types.TypeString(variant, qualifier))
++		name := variant.Obj().Name()
++		if i := strings.LastIndexByte(name, '.'); i >= 0 {
++			name = name[i+1:]
++		}
++		fmt.Fprintf(&buf, "case %s:\n", name)
 +	}
 +
 +	if inaccessible {
@@ -184,7 +195,7 @@ index 7b1a7e8cbe..0c9123b896 100644
  	var dottedBuf bytes.Buffer
  	// writeDotted emits a dotted path a.b.c.
 diff --git a/internal/cache/parsego/resolver.go b/internal/cache/parsego/resolver.go
-index 450fcc0a29..8133781196 100644
+index 450fcc0..8133781 100644
 --- a/internal/cache/parsego/resolver.go
 +++ b/internal/cache/parsego/resolver.go
 @@ -507,6 +507,28 @@ func (r *resolver) Visit(node ast.Node) ast.Visitor {
@@ -217,7 +228,7 @@ index 450fcc0a29..8133781196 100644
  		return r
  	}
 diff --git a/internal/cache/symbols/symbols.go b/internal/cache/symbols/symbols.go
-index baef055f64..0a8d3258f0 100644
+index baef055..0a8d325 100644
 --- a/internal/cache/symbols/symbols.go
 +++ b/internal/cache/symbols/symbols.go
 @@ -108,6 +108,17 @@ func symbolizeFile(pgf *parsego.File) []Symbol {
@@ -239,7 +250,7 @@ index baef055f64..0a8d3258f0 100644
  	}
  
 diff --git a/internal/cache/typerefs/refs.go b/internal/cache/typerefs/refs.go
-index 3b9763eddc..8d3679871b 100644
+index 3b9763e..8d36798 100644
 --- a/internal/cache/typerefs/refs.go
 +++ b/internal/cache/typerefs/refs.go
 @@ -178,6 +178,12 @@ func index(pgfs []*parsego.File, imports map[metadata.ImportPath]*metadata.Packa
@@ -289,10 +300,36 @@ index 3b9763eddc..8d3679871b 100644
  		// nothing to do
  
 diff --git a/internal/golang/completion/completion.go b/internal/golang/completion/completion.go
-index 70a1468ded..3fa86fd497 100644
+index 70a1468..6b0912a 100644
 --- a/internal/golang/completion/completion.go
 +++ b/internal/golang/completion/completion.go
-@@ -1440,6 +1440,9 @@ func (c *completer) methodsAndFields(typ types.Type, addressable bool, imp *impo
+@@ -1344,6 +1344,25 @@ func (c *completer) selector(ctx context.Context, sel *ast.SelectorExpr) error {
+ 
+ 	// True selector?
+ 	if tv, ok := c.pkg.TypesInfo().Types[sel.X]; ok {
++		if tv.IsType() {
++			if named, _ := types.Unalias(tv.Type).(*types.Named); named != nil {
++				if enumType := named.EnumType(); enumType != nil && enumType.Origin() == named.Origin() {
++					for _, variant := range named.EnumVariants() {
++						obj := variant.Obj()
++						name := obj.Name()
++						if i := strings.LastIndexByte(name, '.'); i >= 0 {
++							name = name[i+1:]
++						}
++						if obj.Pkg() == c.pkg.Types() || obj.Exported() {
++							c.deepState.enqueue(candidate{
++								obj:   types.NewTypeName(obj.Pos(), obj.Pkg(), name, variant),
++								score: stdScore,
++							})
++						}
++					}
++				}
++			}
++		}
+ 		c.methodsAndFields(tv.Type, tv.Addressable(), nil, c.deepState.enqueue)
+ 		c.addPostfixSnippetCandidates(ctx, sel)
+ 		return nil
+@@ -1440,6 +1459,9 @@ func (c *completer) methodsAndFields(typ types.Type, addressable bool, imp *impo
  
  	for method := range mset.Methods() {
  		obj := method.Obj()
@@ -302,19 +339,50 @@ index 70a1468ded..3fa86fd497 100644
  		// to the other side of the cb() queue?
  		if c.tooNew(obj) {
  			continue // std method too new for file's Go version
+diff --git a/internal/golang/definition.go b/internal/golang/definition.go
+index f28fa9b..a41507a 100644
+--- a/internal/golang/definition.go
++++ b/internal/golang/definition.go
+@@ -405,7 +405,7 @@ func ObjectLocation(ctx context.Context, fset *token.FileSet, snapshot *cache.Sn
+ 	//
+ 	// But this is just a heuristic, and it's wrong in this case:
+ 	// 	import ‸ast "go/ast"  	// name matches (spurious result is `ast "go/`)
+-	nameLen := len(obj.Name())
++	nameLen := len(sourceName(obj))
+ 	if pkgName, ok := obj.(*types.PkgName); ok && pkgName.Imported().Name() == pkgName.Name() {
+ 		nameLen = len(pkgName.Imported().Path()) + len(`""`)
+ 	}
 diff --git a/internal/golang/hover.go b/internal/golang/hover.go
-index 60b7b69e0b..6f846293e5 100644
+index 60b7b69..c8672f6 100644
 --- a/internal/golang/hover.go
 +++ b/internal/golang/hover.go
+@@ -158,7 +158,7 @@ func findRhsTypeDecl(ctx context.Context, snapshot *cache.Snapshot, pkg *cache.P
+ 			if err != nil {
+ 				return "", err
+ 			}
+-			realTypeDecl, _, err := typeDeclContent(declPGF1, declPos1, obj.Name())
++			realTypeDecl, _, err := typeDeclContent(declPGF1, declPos1, sourceName(obj))
+ 			return realTypeDecl, err
+ 		}
+ 	}
 @@ -405,7 +405,7 @@ func hover(ctx context.Context, snapshot *cache.Snapshot, fh file.Handle, rng pr
  	decl, spec, field, assign := findDeclInfo([]*ast.File{declPGF.File}, declPos) // may be nil^4
  
  	var docText string
 -	if docComment := chooseDocComment(declPGF, decl, spec, field, assign); docComment != nil {
-+	if docComment := chooseDocComment(declPGF, declPos, obj.Name(), decl, spec, field, assign); docComment != nil {
++	if docComment := chooseDocComment(declPGF, declPos, sourceName(obj), decl, spec, field, assign); docComment != nil {
  		docBuf := new(strings.Builder)
  		docBuf.WriteString(docComment.Text())
  
+@@ -570,7 +570,7 @@ func hover(ctx context.Context, snapshot *cache.Snapshot, fh file.Handle, rng pr
+ 	_, isTypeParam := types.Unalias(obj.Type()).(*types.TypeParam)
+ 	if isTypeName && !isTypeParam {
+ 		var spec1 *ast.TypeSpec
+-		typeDecl, spec1, err = typeDeclContent(declPGF, declPos, obj.Name())
++		typeDecl, spec1, err = typeDeclContent(declPGF, declPos, sourceName(obj))
+ 		if err != nil {
+ 			return protocol.Range{}, nil, err
+ 		}
 @@ -617,14 +617,16 @@ func hover(ctx context.Context, snapshot *cache.Snapshot, fh file.Handle, rng pr
  		// already been displayed when the node was formatted
  		// above. Don't list these again.
@@ -349,7 +417,7 @@ index 60b7b69e0b..6f846293e5 100644
  			if !accessibleTo(m.Obj(), pkg.Types()) {
  				continue // inaccessible
  			}
-@@ -803,10 +808,44 @@ func hover(ctx context.Context, snapshot *cache.Snapshot, fh file.Handle, rng pr
+@@ -803,10 +808,47 @@ func hover(ctx context.Context, snapshot *cache.Snapshot, fh file.Handle, rng pr
  
  // typeDeclContent returns a well formatted type definition.
  func typeDeclContent(declPGF *parsego.File, declPos token.Pos, name string) (string, *ast.TypeSpec, error) {
@@ -374,6 +442,9 @@ index 60b7b69e0b..6f846293e5 100644
 +		return b.String(), spec1, nil
 +	}
 +	if enumDecl, ok := decl.(*ast.EnumDecl); ok {
++		if i := strings.LastIndexByte(name, '.'); i >= 0 {
++			name = name[i+1:]
++		}
 +		decl2 := *enumDecl
 +		decl2.Doc = nil
 +		decl2.Variants = make([]*ast.EnumVariant, 0, len(enumDecl.Variants))
@@ -397,7 +468,7 @@ index 60b7b69e0b..6f846293e5 100644
  		// We cannot find a TypeSpec for this type or alias declaration
  		// (that is not a type parameter or a built-in).
  		// This should be impossible even for ill-formed trees;
-@@ -818,20 +857,6 @@ func typeDeclContent(declPGF *parsego.File, declPos token.Pos, name string) (str
+@@ -818,20 +860,6 @@ func typeDeclContent(declPGF *parsego.File, declPos token.Pos, name string) (str
  		}
  		return "", nil, errorf("type name %q without type spec", name)
  	}
@@ -418,12 +489,12 @@ index 60b7b69e0b..6f846293e5 100644
  }
  
  // hoverBuiltin computes hover information when hovering over a builtin
-@@ -1359,12 +1384,12 @@ func HoverDocForObject(ctx context.Context, snapshot *cache.Snapshot, fset *toke
+@@ -1359,12 +1387,12 @@ func HoverDocForObject(ctx context.Context, snapshot *cache.Snapshot, fset *toke
  	}
  
  	decl, spec, field, assign := findDeclInfo([]*ast.File{pgf.File}, pos)
 -	return chooseDocComment(pgf, decl, spec, field, assign), nil
-+	return chooseDocComment(pgf, pos, obj.Name(), decl, spec, field, assign), nil
++	return chooseDocComment(pgf, pos, sourceName(obj), decl, spec, field, assign), nil
  }
  
  // chooseDocComment returns the best doc comment for the given declaration
@@ -433,7 +504,7 @@ index 60b7b69e0b..6f846293e5 100644
  	if assign != nil {
  		// AssignStmt lacks a Doc field; locate the comment on the line above.
  		tokFile := pgf.Tok
-@@ -1395,6 +1420,26 @@ func chooseDocComment(pgf *parsego.File, decl ast.Decl, spec ast.Spec, field *as
+@@ -1395,6 +1423,26 @@ func chooseDocComment(pgf *parsego.File, decl ast.Decl, spec ast.Spec, field *as
  	switch decl := decl.(type) {
  	case *ast.FuncDecl:
  		return decl.Doc
@@ -460,7 +531,7 @@ index 60b7b69e0b..6f846293e5 100644
  	case *ast.GenDecl:
  		switch spec := spec.(type) {
  		case *ast.ValueSpec:
-@@ -1770,6 +1815,20 @@ func findDeclInfo(files []*ast.File, pos token.Pos) (decl ast.Decl, spec ast.Spe
+@@ -1770,6 +1818,20 @@ func findDeclInfo(files []*ast.File, pos token.Pos) (decl ast.Decl, spec ast.Spe
  				return false
  			}
  
@@ -482,9 +553,27 @@ index 60b7b69e0b..6f846293e5 100644
  			for _, s := range n.Specs {
  				switch s := s.(type) {
 diff --git a/internal/golang/rename.go b/internal/golang/rename.go
-index 9e04f8dffb..6590ab745b 100644
+index 9e04f8d..f8e0664 100644
 --- a/internal/golang/rename.go
 +++ b/internal/golang/rename.go
+@@ -180,7 +180,7 @@ func PrepareRename(ctx context.Context, snapshot *cache.Snapshot, f file.Handle,
+ 	}
+ 	return &PrepareItem{
+ 		Range: nodeRng,
+-		Text:  obj.Name(),
++		Text:  sourceName(obj),
+ 	}, nil, nil
+ }
+ 
+@@ -614,7 +614,7 @@ func renameOrdinary(ctx context.Context, snapshot *cache.Snapshot, uri protocol.
+ 	// Pick a representative object arbitrarily.
+ 	// (All share the same name, pos, and kind.)
+ 	obj, node := targets[0].obj, targets[0].cur.Node()
+-	if obj.Name() == newName {
++	if sourceName(obj) == newName {
+ 		return nil, fmt.Errorf("old and new names are the same: %s", newName)
+ 	}
+ 	if err := checkRenamable(obj, node); err != nil {
 @@ -1689,6 +1689,13 @@ func (r *docLinkRenamer) update(pgf *parsego.File) (result []diff.Edit, err erro
  			doc = decl.Doc
  		case *ast.FuncDecl:
@@ -514,7 +603,7 @@ index 9e04f8dffb..6590ab745b 100644
  			return decl.Doc
  		// For {Type,Value}Spec, if the doc on the spec is absent,
 diff --git a/internal/golang/semtok.go b/internal/golang/semtok.go
-index 4d0a835ca7..8d27607e18 100644
+index 4d0a835..8d27607 100644
 --- a/internal/golang/semtok.go
 +++ b/internal/golang/semtok.go
 @@ -432,6 +432,9 @@ func (tv *tokenVisitor) inspect(n ast.Node) (descend bool) {
@@ -539,7 +628,7 @@ index 4d0a835ca7..8d27607e18 100644
  		// ident could be type in a field, or a method in an interface type, or a variable
  		if id == parent.Type {
 diff --git a/internal/golang/symbols.go b/internal/golang/symbols.go
-index f41b56cd69..547bc02ed5 100644
+index f41b56c..547bc02 100644
 --- a/internal/golang/symbols.go
 +++ b/internal/golang/symbols.go
 @@ -71,6 +71,11 @@ func DocumentSymbols(ctx context.Context, snapshot *cache.Snapshot, fh file.Hand
@@ -608,8 +697,39 @@ index f41b56cd69..547bc02ed5 100644
  func typeDetails(m *protocol.Mapper, tf *token.File, typExpr ast.Expr) (kind protocol.SymbolKind, detail string, children []protocol.DocumentSymbol) {
  	switch typExpr := typExpr.(type) {
  	case *ast.StructType:
+diff --git a/internal/golang/util.go b/internal/golang/util.go
+index a25cf46..f9d200d 100644
+--- a/internal/golang/util.go
++++ b/internal/golang/util.go
+@@ -23,6 +23,26 @@ import (
+ 	"golang.org/x/tools/gopls/internal/util/tokeninternal"
+ )
+ 
++// sourceName returns the identifier spelling used at an object's declaration.
++// Enum variant type objects have a qualified package-local name (Result.Ok),
++// while their declaring identifier is only the final component (Ok).
++func sourceName(obj types.Object) string {
++	name := obj.Name()
++	tname, _ := obj.(*types.TypeName)
++	if tname == nil {
++		return name
++	}
++	named, _ := types.Unalias(tname.Type()).(*types.Named)
++	if named != nil {
++		if enumType := named.EnumType(); enumType != nil && enumType.Origin() != named.Origin() {
++			if i := strings.LastIndexByte(name, '.'); i >= 0 {
++				return name[i+1:]
++			}
++		}
++	}
++	return name
++}
++
+ // IsGenerated reads and parses the header of the file denoted by uri
+ // and reports whether it [ast.IsGenerated].
+ func IsGenerated(ctx context.Context, snapshot *cache.Snapshot, uri protocol.DocumentURI) bool {
 diff --git a/internal/settings/settings.go b/internal/settings/settings.go
-index 52c7786bfe..78a97d3364 100644
+index 52c7786..78a97d3 100644
 --- a/internal/settings/settings.go
 +++ b/internal/settings/settings.go
 @@ -1706,12 +1706,12 @@ func asStringSlice(value any) ([]string, error) {
@@ -630,10 +750,10 @@ index 52c7786bfe..78a97d3364 100644
  func asEnum[S ~string](value any, options ...S) (S, error) {
 diff --git a/internal/test/integration/completion/enum_test.go b/internal/test/integration/completion/enum_test.go
 new file mode 100644
-index 0000000000..ad665909e5
+index 0000000..9c448bd
 --- /dev/null
 +++ b/internal/test/integration/completion/enum_test.go
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,88 @@
 +// Copyright 2026 The Go Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style
 +// license that can be found in the LICENSE file.
@@ -688,6 +808,33 @@ index 0000000000..ad665909e5
 +	})
 +}
 +
++func TestEnumVariantCompletion(t *testing.T) {
++	const files = `
++-- go.mod --
++module example.com
++
++go 1.28
++-- enum.go --
++package example
++
++enum Result {
++	Ok { Value int }
++	Err { Message string }
++}
++
++var _ = Result.
++`
++
++	WithOptions(Modes(Default)).Run(t, files, func(t *testing.T, env *Env) {
++		env.OpenFile("enum.go")
++		items := env.Completion(env.RegexpSearch("enum.go", `Result\.()`))
++		labels := completionLabels(items.Items)
++		if !slices.Contains(labels, "Ok") || !slices.Contains(labels, "Err") || slices.Contains(labels, "Result.Ok") {
++			t.Errorf("Result completion labels: %v", labels)
++		}
++	})
++}
++
 +func completionLabels(items []protocol.CompletionItem) []string {
 +	labels := make([]string, len(items))
 +	for i, item := range items {
@@ -696,7 +843,7 @@ index 0000000000..ad665909e5
 +	return labels
 +}
 diff --git a/internal/test/integration/misc/hover_test.go b/internal/test/integration/misc/hover_test.go
-index b2e9af7b91..d2f17c79b4 100644
+index b2e9af7..03d3f9c 100644
 --- a/internal/test/integration/misc/hover_test.go
 +++ b/internal/test/integration/misc/hover_test.go
 @@ -424,6 +424,56 @@ func Hello() string {

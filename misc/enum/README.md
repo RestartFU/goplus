@@ -17,6 +17,17 @@ Methods belong to the enum type itself, never to an individual variant. A
 method that needs variant fields switches on its enum receiver and uses the
 case-narrowed receiver inside each arm.
 
+Variants are namespaced by their enum when no target type is available:
+
+```go
+x := Result.Ok{Value: 1}
+y := Option.Some[string]{Value: "ok"}
+```
+
+When an assignment or return context already supplies the enum type, the
+short constructor is inferred (`var x Result = Ok{}`); enum switch cases also
+use short names (`case Ok:`). Short variant names are not package-scope types.
+
 They were verified with x/tools commit `635ae9663724` and gopls v0.22.0:
 
 ```sh

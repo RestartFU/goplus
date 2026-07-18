@@ -7,6 +7,14 @@ package main
 import "./enumlib"
 
 func main() {
+	var result enumlib.Result = Ok{Value: 3}
+	if result.Or(0) != 3 {
+		panic("qualified imported result variant")
+	}
+	var option enumlib.Option[int] = Some{Value: 4}
+	if option.Or(0) != 4 {
+		panic("qualified imported option variant")
+	}
 	if enumlib.NewResult().Or(0) != 7 {
 		panic("non-generic imported enum method")
 	}
