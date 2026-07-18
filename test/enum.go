@@ -8,6 +8,8 @@ package main
 
 import "reflect"
 
+var enum = 1
+
 enum Result {
 	Ok { value int }
 	Err { err string }
@@ -78,6 +80,12 @@ func unwrap[T any](option Option[T], zero T) T {
 }
 
 func main() {
+	enum := enum + 1
+	enum++
+	if enum != 3 {
+		panic("contextual enum keyword")
+	}
+
 	var pointer any = &Result.Ok{value: 42}
 	if _, ok := pointer.(Result); ok {
 		panic("pointer to enum variant passed runtime assertion")
