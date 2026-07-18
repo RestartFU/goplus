@@ -45,6 +45,13 @@ func getitab(inter *interfacetype, typ *_type, canfail bool) *itab {
 	if len(inter.Methods) == 0 {
 		throw("internal error - misuse of itab")
 	}
+	if typ.Kind() == abi.Pointer && isEnumInterface(inter) {
+		if canfail {
+			return nil
+		}
+		name := toRType(&inter.Type).nameOff(inter.Methods[0].Name)
+		panic(&TypeAssertionError{concrete: typ, asserted: &inter.Type, missingMethod: name.Name()})
+	}
 
 	// easy case
 	if typ.TFlag&abi.TFlagUncommon == 0 {
@@ -100,6 +107,18 @@ finish:
 	// interface function was missing, so initialize
 	// the itab again to get the missing function name.
 	panic(&TypeAssertionError{concrete: typ, asserted: &inter.Type, missingMethod: itabInit(m, false)})
+}
+
+// isEnumInterface reports whether inter is the sealed runtime interface used
+// to represent an enum. Pointers inherit value-receiver methods in Go, so the
+// runtime must enforce that only variant values, never pointers to variants,
+// satisfy this otherwise-unspellable marker interface.
+func isEnumInterface(inter *interfacetype) bool {
+	if len(inter.Methods) != 1 {
+		return false
+	}
+	name := toRType(&inter.Type).nameOff(inter.Methods[0].Name).Name()
+	return len(name) > len(".enum.") && name[:len(".enum.")] == ".enum."
 }
 
 // find finds the given interface/type pair in t.

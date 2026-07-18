@@ -648,6 +648,12 @@ func (check *Checker) enumDecl(info *enumDeclInfo) {
 		sig := NewSignatureType(recv, rparams, nil, nil, nil, false)
 		named[i+1].methods = []*Func{NewFunc(variant.Name.Pos(), check.pkg, markerName, sig)}
 	}
+	for _, variant := range named[1:] {
+		variant := variant
+		check.later(func() {
+			check.validType(variant)
+		}).describef(variant.obj, "validType(%s)", variant.obj.Name())
+	}
 
 	for _, obj := range info.objects {
 		check.collectMethods(obj)

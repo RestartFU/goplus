@@ -1710,10 +1710,8 @@ func (w *writer) switchStmt(stmt *syntax.SwitchStmt) {
 	var enumTag *syntax.Name
 	if !typeSwitch && stmt.Tag != nil {
 		enumTag, _ = syntax.Unparen(stmt.Tag).(*syntax.Name)
-		if enumTag != nil {
-			named, _ := types2.Unalias(w.p.typeOf(enumTag)).(*types2.Named)
-			typeSwitch = named != nil && named.EnumType() != nil && named.EnumType().Origin() == named.Origin()
-		}
+		named, _ := types2.Unalias(w.p.typeOf(stmt.Tag)).(*types2.Named)
+		typeSwitch = named != nil && named.EnumType() != nil && named.EnumType().Origin() == named.Origin()
 	}
 	if w.Bool(typeSwitch) {
 		if guard != nil {
@@ -1730,14 +1728,15 @@ func (w *writer) switchStmt(stmt *syntax.SwitchStmt) {
 			}
 			w.expr(guard.X)
 		} else {
-			iface = w.p.typeOf(enumTag)
-			w.pos(enumTag)
-			w.Bool(true)
-			w.pos(enumTag)
-			w.Sync(pkgbits.SyncLocalIdent)
-			w.pkg(w.p.curpkg)
-			w.String(enumTag.Value)
-			w.expr(enumTag)
+			iface = w.p.typeOf(stmt.Tag)
+			w.pos(stmt.Tag)
+			if w.Bool(enumTag != nil) {
+				w.pos(enumTag)
+				w.Sync(pkgbits.SyncLocalIdent)
+				w.pkg(w.p.curpkg)
+				w.String(enumTag.Value)
+			}
+			w.expr(stmt.Tag)
 		}
 	} else {
 		tag := stmt.Tag

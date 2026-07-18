@@ -421,6 +421,9 @@ func implements(T, V *abi.Type) bool {
 	}
 	rT := toRType(T)
 	rV := toRType(V)
+	if V.Kind() == abi.Pointer && isEnumInterface(t, rT) {
+		return false
+	}
 
 	// The same algorithm applies in both cases, but the
 	// method tables for an interface type and a concrete type
@@ -495,6 +498,14 @@ func implements(T, V *abi.Type) bool {
 		}
 	}
 	return false
+}
+
+func isEnumInterface(t *interfaceType, rt rtype) bool {
+	if len(t.Methods) != 1 {
+		return false
+	}
+	name := rt.nameOff(t.Methods[0].Name).Name()
+	return len(name) > len(".enum.") && name[:len(".enum.")] == ".enum."
 }
 
 // directlyAssignable reports whether a value x of type V can be directly

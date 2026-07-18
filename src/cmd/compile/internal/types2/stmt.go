@@ -727,7 +727,8 @@ func (check *Checker) switchStmt(inner stmtContext, s *syntax.SwitchStmt) {
 		// By checking assignment of x to an invisible temporary
 		// (as a compiler would), we get all the relevant checks.
 		check.assignment(&x, nil, "switch expression")
-		if name, ok := syntax.Unparen(s.Tag).(*syntax.Name); ok && check.isEnumType(x.typ()) {
+		if check.isEnumType(x.typ()) {
+			name, _ := syntax.Unparen(s.Tag).(*syntax.Name)
 			check.enumValueSwitchStmt(inner|inTypeSwitch, s, name, &x)
 			return
 		}
@@ -788,11 +789,16 @@ func (check *Checker) enumValueSwitchStmt(inner stmtContext, s *syntax.SwitchStm
 		T := check.enumCaseTypes(x, cases, seen)
 		check.openScope(clause, "enum case")
 
-		obj := newVar(LocalVar, tag.Pos(), check.pkg, tag.Value, T)
-		check.declare(check.scope, nil, obj, clause.Colon)
-		check.recordImplicit(clause, obj)
+		var obj *Var
+		if tag != nil {
+			obj = newVar(LocalVar, tag.Pos(), check.pkg, tag.Value, T)
+			check.declare(check.scope, nil, obj, clause.Colon)
+			check.recordImplicit(clause, obj)
+		}
 		check.stmtList(inner, clause.Body)
-		check.usedVars[obj] = true // the narrowed shadow is implicit
+		if obj != nil {
+			check.usedVars[obj] = true // the narrowed shadow is implicit
+		}
 		check.closeScope()
 	}
 

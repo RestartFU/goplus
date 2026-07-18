@@ -68,6 +68,16 @@ func makeResult() Result { return Ok{value: 42} }
 	if AssignableTo(NewPointer(ok), result) {
 		t.Error("*Ok is assignable to Result")
 	}
+	if Implements(NewPointer(ok), result.Underlying().(*Interface)) {
+		t.Error("*Ok implements Result")
+	}
+	orSig := NewSignatureType(nil, nil, nil,
+		NewTuple(NewVar(nopos, nil, "", Typ[Int])),
+		NewTuple(NewVar(nopos, nil, "", Typ[Int])), false)
+	orIface := NewInterfaceType([]*Func{NewFunc(nopos, nil, "Value", orSig)}, nil)
+	if Implements(result, orIface) {
+		t.Error("enum convenience methods must not make Result implement another interface")
+	}
 }
 
 func TestEnumVariantReceiverRejected(t *testing.T) {
@@ -133,6 +143,19 @@ func inspect(result Result) int {
 		t.Fatal(err)
 	}
 
+	const expressions = `package p
+enum Result { Ok; Err }
+func makeResult() Result { return Ok{} }
+type Holder struct { Result Result }
+func inspect(h Holder) {
+	switch makeResult() { case Ok:; case Err:; case nil: }
+	switch h.Result { case Ok:; case Err:; case nil: }
+}
+`
+	if _, err := typecheck(expressions, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+
 	const duplicate = `package p
 enum Result { Ok; Err }
 func inspect(result Result) { switch result { case Ok:; case Ok:; case Err:; case nil: } }
@@ -143,10 +166,34 @@ func inspect(result Result) { switch result { case Ok:; case Ok:; case Err:; cas
 	}
 }
 
+func TestEnumRejectsRecursiveVariants(t *testing.T) {
+	const direct = `package p
+enum E { V { next V } }
+`
+	if _, err := typecheck(direct, nil, nil); err == nil || !strings.Contains(err.Error(), "invalid recursive type") {
+		t.Fatalf("direct recursive variant error = %v", err)
+	}
+
+	const mutual = `package p
+enum E { A { b B }; B { a A } }
+`
+	if _, err := typecheck(mutual, nil, nil); err == nil || !strings.Contains(err.Error(), "invalid recursive type") {
+		t.Fatalf("mutually recursive variant error = %v", err)
+	}
+
+	const indirect = `package p
+enum E { V { parent E; next *V } }
+`
+	if _, err := typecheck(indirect, nil, nil); err != nil {
+		t.Fatalf("indirect recursive variant: %v", err)
+	}
+}
+
 func TestEnumRejectsPointerVariant(t *testing.T) {
 	const src = `package p
 enum Result { Ok }
-var _ = Result(&Ok{})
+type R = Result
+var _ R = &Ok{}
 `
 	_, err := typecheck(src, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "pointer to enum variant is not an enum value") {

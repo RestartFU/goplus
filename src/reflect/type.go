@@ -1493,6 +1493,9 @@ func implements(T, V *abi.Type) bool {
 	if len(t.Methods) == 0 {
 		return true
 	}
+	if V.Kind() == abi.Pointer && isEnumInterface(t) {
+		return false
+	}
 
 	// The same algorithm applies in both cases, but the
 	// method tables for an interface type and a concrete type
@@ -1567,6 +1570,14 @@ func implements(T, V *abi.Type) bool {
 		}
 	}
 	return false
+}
+
+func isEnumInterface(t *interfaceType) bool {
+	if len(t.Methods) != 1 {
+		return false
+	}
+	name := t.nameOff(t.Methods[0].Name).Name()
+	return len(name) > len(".enum.") && name[:len(".enum.")] == ".enum."
 }
 
 // specialChannelAssignability reports whether a value x of channel type V

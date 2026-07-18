@@ -265,6 +265,18 @@ func (check *Checker) implements(V, T Type, constraint bool, cause *string) bool
 		}
 		return false
 	}
+	if marker := enumInterfaceMarker(Ti); marker != "" {
+		if ptr, _ := Unalias(V).(*Pointer); ptr != nil {
+			if variant, _ := Unalias(ptr.base).(*Named); variant != nil {
+				if variant.enumVariantMarker() == marker {
+					if cause != nil {
+						*cause = check.sprintf("pointer to enum variant %s is not an enum value", variant)
+					}
+					return false
+				}
+			}
+		}
+	}
 
 	// Every type satisfies the empty interface.
 	if Ti.Empty() {
@@ -288,8 +300,19 @@ func (check *Checker) implements(V, T Type, constraint bool, cause *string) bool
 		return false
 	}
 
+	// Methods declared on an enum are statically dispatched conveniences on
+	// enum-typed values. They are not runtime interface methods implemented by
+	// every variant, so they don't make the enum implement another interface.
+	methodSource := V
+	if named, _ := Unalias(V).(*Named); named != nil && named.enumMarker() != "" {
+		target, _ := Unalias(T).(*Named)
+		if target == nil || target.Origin() != named.Origin() {
+			methodSource = Vu
+		}
+	}
+
 	// V must implement T's methods, if any.
-	if !check.hasAllMethods(V, T, true, Identical, cause) /* !Implements(V, T) */ {
+	if !check.hasAllMethods(methodSource, T, true, Identical, cause) /* !Implements(V, T) */ {
 		if cause != nil {
 			*cause = check.sprintf("%s does not %s %s %s", V, verb, T, *cause)
 		}
@@ -378,6 +401,17 @@ func (check *Checker) implements(V, T Type, constraint bool, cause *string) bool
 	}
 
 	return checkComparability()
+}
+
+func enumInterfaceMarker(iface *Interface) string {
+	if iface.NumMethods() != 1 {
+		return ""
+	}
+	name := iface.Method(0).name
+	if len(name) > len(".enum.") && name[:len(".enum.")] == ".enum." {
+		return name
+	}
+	return ""
 }
 
 // mentions reports whether type T "mentions" typ in an (embedded) element or term

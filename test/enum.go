@@ -6,6 +6,8 @@
 
 package main
 
+import "reflect"
+
 enum Result {
 	Ok { value int }
 	Err { err string }
@@ -53,6 +55,18 @@ func inspect(result Result) int {
 	panic("unreachable")
 }
 
+func makeResult() Result { return Ok{value: 42} }
+
+func inspectExpression() int {
+	switch makeResult() {
+	case Ok:
+		return 42
+	case Err, None, nil:
+		return 0
+	}
+	return 0
+}
+
 func unwrap[T any](option Option[T], zero T) T {
 	switch option {
 	case Some[T]:
@@ -64,8 +78,16 @@ func unwrap[T any](option Option[T], zero T) T {
 }
 
 func main() {
+	var pointer any = &Ok{value: 42}
+	if _, ok := pointer.(Result); ok {
+		panic("pointer to enum variant passed runtime assertion")
+	}
+	if reflect.TypeFor[*Ok]().Implements(reflect.TypeFor[Result]()) {
+		panic("pointer to enum variant implements enum through reflection")
+	}
+
 	var result Result = Ok{value: 42}
-	if inspect(result) != 42 || result.Value() != 42 {
+	if inspect(result) != 42 || inspectExpression() != 42 || result.Value() != 42 {
 		panic("non-generic enum")
 	}
 
