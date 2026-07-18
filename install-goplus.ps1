@@ -38,6 +38,17 @@ $DriveRoot = [IO.Path]::GetPathRoot($Prefix).TrimEnd('\')
 if (-not $PrefixParent -or $Prefix.TrimEnd('\') -eq $HomePath -or $Prefix.TrimEnd('\') -eq $DriveRoot) {
     throw "refusing unsafe install prefix: $Prefix"
 }
+$MarkerName = ".goplus-managed"
+if (Test-Path -LiteralPath $Prefix) {
+    if (-not (Test-Path -LiteralPath $Prefix -PathType Container)) {
+        throw "refusing to replace non-directory install prefix: $Prefix"
+    }
+    $PrefixEntries = @(Get-ChildItem -Force -LiteralPath $Prefix)
+    $MarkerPath = Join-Path $Prefix $MarkerName
+    if ($PrefixEntries.Count -gt 0 -and -not (Test-Path -LiteralPath $MarkerPath -PathType Leaf)) {
+        throw "refusing to replace unmanaged non-empty install prefix: $Prefix"
+    }
+}
 
 $ToolsRepo = if ($env:GOPLUS_TOOLS_REPO) { $env:GOPLUS_TOOLS_REPO } else { "https://go.googlesource.com/tools" }
 $ToolsRef = if ($env:GOPLUS_TOOLS_REF) { $env:GOPLUS_TOOLS_REF } else { "635ae9663724" }
@@ -67,6 +78,7 @@ $StageGo = Join-Path $Stage "go"
 $StageBin = Join-Path $Stage "bin"
 $StageLibexec = Join-Path $Stage "libexec"
 New-Item -ItemType Directory -Force -Path $StageGo, $StageBin, $StageLibexec | Out-Null
+Set-Content -LiteralPath (Join-Path $Stage $MarkerName) -Value "Go+ managed installation" -NoNewline
 
 $OriginalGOROOT = $env:GOROOT
 $OriginalGOTOOLCHAIN = $env:GOTOOLCHAIN

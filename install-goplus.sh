@@ -59,16 +59,27 @@ for command in bash git cc; do
 	}
 done
 
-mkdir -p "$(dirname -- "$prefix")" "$bin_dir"
+mkdir -p "$(dirname -- "$prefix")"
 prefix_parent=$(CDPATH= cd -- "$(dirname -- "$prefix")" && pwd -P)
 prefix=$prefix_parent/$(basename -- "$prefix")
-bin_dir=$(CDPATH= cd -- "$bin_dir" && pwd -P)
 case $prefix in
 "" | / | "$HOME")
 	echo "refusing unsafe install prefix: $prefix" >&2
 	exit 1
 	;;
 esac
+
+marker=.goplus-managed
+if [[ -e $prefix || -L $prefix ]]; then
+	if [[ ! -d $prefix || -L $prefix ]]; then
+		echo "refusing to replace non-directory install prefix: $prefix" >&2
+		exit 1
+	fi
+	if [[ ! -f $prefix/$marker && -n $(find "$prefix" -mindepth 1 -maxdepth 1 -print -quit) ]]; then
+		echo "refusing to replace unmanaged non-empty install prefix: $prefix" >&2
+		exit 1
+	fi
+fi
 
 echo "Building Go+ from $repo_root"
 (cd "$repo_root/src" && ./make.bash)
@@ -80,6 +91,7 @@ work=$(mktemp -d "$prefix_parent/.goplus-install.XXXXXX")
 trap 'rm -rf -- "$work"' EXIT
 stage=$work/root
 mkdir -p "$stage/go" "$stage/bin" "$stage/libexec"
+printf '%s\n' 'Go+ managed installation' >"$stage/$marker"
 
 for dir in api bin doc lib misc src; do
 	cp -a "$repo_root/$dir" "$stage/go/"
@@ -142,13 +154,16 @@ if ! mv -- "$stage" "$prefix"; then
 	[[ -z $backup ]] || mv -- "$backup" "$prefix"
 	exit 1
 fi
-[[ -z $backup ]] || rm -rf -- "$backup"
+
+mkdir -p "$bin_dir"
+bin_dir=$(CDPATH= cd -- "$bin_dir" && pwd -P)
 
 if [[ $bin_dir != "$prefix/bin" ]]; then
 	for name in go+ gofmt+ gopls+ goimports+; do
 		ln -sfn "$prefix/bin/$name" "$bin_dir/$name"
 	done
 fi
+[[ -z $backup ]] || rm -rf -- "$backup"
 
 echo
 echo "Go+ installed in $prefix"
