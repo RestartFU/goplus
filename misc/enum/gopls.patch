@@ -68,7 +68,7 @@ index 0000000..6bc4be2
 +	}
 +}
 diff --git a/internal/analysis/fillswitch/fillswitch.go b/internal/analysis/fillswitch/fillswitch.go
-index 7b1a7e8..15d9c88 100644
+index 7b1a7e8..c7544b9 100644
 --- a/internal/analysis/fillswitch/fillswitch.go
 +++ b/internal/analysis/fillswitch/fillswitch.go
 @@ -10,6 +10,7 @@ import (
@@ -106,7 +106,7 @@ index 7b1a7e8..15d9c88 100644
  
  	existingCases := caseConsts(stmt.Body, info)
  	// Gather accessible named constants of the same type as the switch value.
-@@ -186,6 +200,87 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
+@@ -186,6 +200,88 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
  	}
  }
  
@@ -144,6 +144,7 @@ index 7b1a7e8..15d9c88 100644
 +
 +	var buf bytes.Buffer
 +	inaccessible := false
++	qualifier := typesinternal.NameRelativeTo(pkg)
 +	for _, variant := range variants {
 +		if covered(variant) {
 +			continue
