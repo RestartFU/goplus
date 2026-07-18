@@ -267,7 +267,8 @@ func (check *Checker) implements(V, T Type, constraint bool, cause *string) bool
 	}
 	if marker := enumInterfaceMarker(Ti); marker != "" {
 		variant, _ := Unalias(V).(*Named)
-		if variant == nil || variant.enumVariantMarker() != marker {
+		_, interfaceType := Vu.(*Interface)
+		if !interfaceType && (variant == nil || variant.enumVariantMarker() != marker) {
 			if cause != nil {
 				*cause = check.sprintf("%s is not a declared variant of %s", V, T)
 			}

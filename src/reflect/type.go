@@ -1493,7 +1493,7 @@ func implements(T, V *abi.Type) bool {
 	if len(t.Methods) == 0 {
 		return true
 	}
-	if isEnumInterface(t) && V.TFlag&abi.TFlagEnumVariant == 0 {
+	if isEnumInterface(t) && V.Kind() != abi.Interface && V.TFlag&abi.TFlagEnumVariant == 0 {
 		return false
 	}
 

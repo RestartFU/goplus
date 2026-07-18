@@ -10,6 +10,7 @@ import (
 	"go/constant"
 	. "internal/types/errors"
 	"slices"
+	"strings"
 )
 
 func (check *Checker) declare(scope *Scope, id *syntax.Name, obj Object, pos syntax.Pos) {
@@ -545,8 +546,8 @@ func (check *Checker) enumDecl(info *enumDeclInfo) {
 		check.structType(styp, &syntax.StructType{FieldList: variant.FieldList, TagList: variant.TagList})
 		for i := 0; i < styp.NumFields(); i++ {
 			field := styp.Field(i)
-			if field.Embedded() && isEnumVariantType(field.Type()) {
-				check.errorf(field, InvalidPtrEmbed, "enum variant %s cannot anonymously embed enum variant %s", variant.Name.Value, field.Type())
+			if field.Embedded() && promotesEnumMarker(field.Type(), nil) {
+				check.errorf(field, InvalidPtrEmbed, "enum variant %s cannot anonymously embed a type that promotes an enum marker: %s", variant.Name.Value, field.Type())
 			}
 		}
 		baseTParams := named[0].TypeParams().list()
@@ -590,16 +591,40 @@ func (check *Checker) enumDecl(info *enumDeclInfo) {
 	}
 }
 
-func isEnumVariantType(typ Type) bool {
+func promotesEnumMarker(typ Type, seen map[Type]bool) bool {
+	typ = Unalias(typ)
 	if ptr, _ := Unalias(typ).(*Pointer); ptr != nil {
-		typ = ptr.Elem()
+		typ = Unalias(ptr.Elem())
 	}
-	named, _ := Unalias(typ).(*Named)
-	if named == nil {
+	if seen == nil {
+		seen = make(map[Type]bool)
+	}
+	if seen[typ] {
 		return false
 	}
-	enumType := named.EnumType()
-	return enumType != nil && named.Origin() != enumType.Origin()
+	seen[typ] = true
+	if named, _ := typ.(*Named); named != nil {
+		if named.EnumType() != nil {
+			return true
+		}
+		typ = named.Underlying()
+	}
+	switch typ := typ.(type) {
+	case *Interface:
+		for i := 0; i < typ.NumMethods(); i++ {
+			if strings.HasPrefix(typ.Method(i).name, ".enum.") {
+				return true
+			}
+		}
+	case *Struct:
+		for i := 0; i < typ.NumFields(); i++ {
+			field := typ.Field(i)
+			if field.Embedded() && promotesEnumMarker(field.Type(), seen) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func enumMarkerParams(pos syntax.Pos, pkg *Package, tparams []*TypeParam) *Tuple {

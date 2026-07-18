@@ -43,6 +43,9 @@ func makeResult() Result { return Result.Ok{value: 42} }
 	if _, ok := result.Underlying().(*Interface); !ok {
 		t.Fatalf("Result underlying type is %T, want *Interface", result.Underlying())
 	}
+	if !Implements(result, result.Underlying().(*Interface)) {
+		t.Error("Result does not implement its own enum interface")
+	}
 	for _, variant := range []*Named{ok, errVariant, none} {
 		if _, ok := variant.Underlying().(*Struct); !ok {
 			t.Errorf("%s underlying type is %T, want *Struct", variant.Obj().Name(), variant.Underlying())
@@ -224,14 +227,23 @@ var _ R = &Result.Ok{}
 	}
 }
 
-func TestEnumRejectsEmbeddedVariant(t *testing.T) {
-	const src = `package p
+func TestEnumRejectsPromotedMarker(t *testing.T) {
+	tests := []string{`package p
 type Inner enum { Public }
 type Outer enum { Wrap { Inner.Public } }
-`
-	_, err := typecheck(src, nil, nil)
-	if err == nil || !strings.Contains(err.Error(), "cannot anonymously embed enum variant") {
-		t.Fatalf("embedded enum variant error = %v", err)
+		`, `package p
+type Inner enum { Public }
+type Outer enum { Wrap { Inner } }
+		`, `package p
+type Inner enum { Public }
+type Carrier struct { Inner }
+type Outer enum { Wrap { Carrier } }
+		`}
+	for _, src := range tests {
+		_, err := typecheck(src, nil, nil)
+		if err == nil || !strings.Contains(err.Error(), "promotes an enum marker") {
+			t.Fatalf("promoted enum marker error = %v", err)
+		}
 	}
 }
 

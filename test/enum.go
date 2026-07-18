@@ -101,6 +101,9 @@ func main() {
 	if reflect.TypeFor[Forged]().Implements(reflect.TypeFor[Result]()) {
 		panic("embedded enum variant implements enum through reflection")
 	}
+	if !reflect.TypeFor[Result]().Implements(reflect.TypeFor[Result]()) {
+		panic("enum does not implement itself through reflection")
+	}
 
 	var result Result = Ok{value: 42}
 	if inspect(result) != 42 || inspectExpression() != 42 || result.Value() != 42 {
