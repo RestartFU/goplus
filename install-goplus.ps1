@@ -68,6 +68,10 @@ $StageBin = Join-Path $Stage "bin"
 $StageLibexec = Join-Path $Stage "libexec"
 New-Item -ItemType Directory -Force -Path $StageGo, $StageBin, $StageLibexec | Out-Null
 
+$OriginalGOROOT = $env:GOROOT
+$OriginalGOTOOLCHAIN = $env:GOTOOLCHAIN
+$OriginalGOWORK = $env:GOWORK
+
 try {
     foreach ($Dir in @("api", "bin", "doc", "lib", "misc", "src")) {
         Copy-Item -Recurse -Force -LiteralPath (Join-Path $RepoRoot $Dir) -Destination $StageGo
@@ -167,6 +171,21 @@ try {
         Write-Host "Open a new terminal to use the updated user PATH."
     }
 } finally {
+    if ($null -eq $OriginalGOROOT) {
+        Remove-Item Env:GOROOT -ErrorAction SilentlyContinue
+    } else {
+        $env:GOROOT = $OriginalGOROOT
+    }
+    if ($null -eq $OriginalGOTOOLCHAIN) {
+        Remove-Item Env:GOTOOLCHAIN -ErrorAction SilentlyContinue
+    } else {
+        $env:GOTOOLCHAIN = $OriginalGOTOOLCHAIN
+    }
+    if ($null -eq $OriginalGOWORK) {
+        Remove-Item Env:GOWORK -ErrorAction SilentlyContinue
+    } else {
+        $env:GOWORK = $OriginalGOWORK
+    }
     if (Test-Path -LiteralPath $Work) {
         Remove-Item -Recurse -Force -LiteralPath $Work
     }
