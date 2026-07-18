@@ -7,6 +7,7 @@ package parser
 import (
 	"fmt"
 	"go/ast"
+	"go/scanner"
 	"go/token"
 	"io/fs"
 	"reflect"
@@ -1111,6 +1112,36 @@ func f(enum string) string {
 `
 	if _, err := ParseFile(token.NewFileSet(), "enum.go", src, DeclarationErrors); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestEnumUnderlyingTypeName(t *testing.T) {
+	const src = `package p
+type enum int
+type E enum
+type G[T any] enum
+type I enum[int]
+`
+	if _, err := ParseFile(token.NewFileSet(), "enum.go", src, DeclarationErrors); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEnumLookaheadDoesNotDuplicateErrors(t *testing.T) {
+	const src = "package p; type E[T @] enum { A }"
+	_, err := ParseFile(token.NewFileSet(), "enum.go", src, 0)
+	errs, ok := err.(scanner.ErrorList)
+	if !ok {
+		t.Fatalf("error has type %T, want scanner.ErrorList", err)
+	}
+	var illegal int
+	for _, err := range errs {
+		if strings.Contains(err.Msg, "illegal character") {
+			illegal++
+		}
+	}
+	if illegal != 1 {
+		t.Fatalf("got %d illegal-character errors, want 1: %v", illegal, errs)
 	}
 }
 

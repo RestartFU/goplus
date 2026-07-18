@@ -2844,6 +2844,11 @@ func (p *parser) parseEnumVariant() *ast.EnumVariant {
 }
 
 func (p *parser) typeDeclIsEnum() bool {
+	errorCount := len(p.errors)
+	defer func() {
+		p.errors = p.errors[:errorCount]
+	}()
+
 	s := p.scanner
 	next := func() (token.Token, string) {
 		for {
@@ -2874,7 +2879,11 @@ func (p *parser) typeDeclIsEnum() bool {
 		}
 		tok, lit = next()
 	}
-	return tok == token.IDENT && lit == "enum"
+	if tok != token.IDENT || lit != "enum" {
+		return false
+	}
+	tok, _ = next()
+	return tok == token.LBRACE
 }
 
 func (p *parser) parseEnumDecl(doc *ast.CommentGroup) *ast.EnumDecl {

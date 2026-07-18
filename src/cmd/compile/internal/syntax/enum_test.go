@@ -93,6 +93,18 @@ func f(enum string) string {
 	}
 }
 
+func TestEnumUnderlyingTypeName(t *testing.T) {
+	const src = `package p
+type enum int
+type E enum
+type G[T any] enum
+type I enum[int]
+`
+	if _, err := Parse(NewFileBase("enum.go"), strings.NewReader(src), nil, nil, 0); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestGroupedEnumRejected(t *testing.T) {
 	const src = "package p; type ( E enum { A } )"
 	if _, err := Parse(NewFileBase("enum.go"), strings.NewReader(src), nil, nil, 0); err == nil {

@@ -659,11 +659,16 @@ func (p *parser) typeDecl(group *Group) Decl {
 				// d.Name "[" pname ptype ...
 				// d.Name "[" pname ptype "," ...
 				d.TParamList = p.paramList(pname, ptype, _Rbrack, true, false) // ptype may be nil
-				if p.tok == _Name && p.lit == "enum" {
-					return p.enumDecl(d)
-				}
 				d.Alias = p.gotAssign()
-				d.Type = p.typeOrNil()
+				if !d.Alias && p.tok == _Name && p.lit == "enum" {
+					name := p.name()
+					if p.tok == _Lbrace {
+						return p.enumDecl(d)
+					}
+					d.Type = p.qualifiedName(name)
+				} else {
+					d.Type = p.typeOrNil()
+				}
 			} else {
 				// d.Name "[" pname "]" ...
 				// d.Name "[" x ...
@@ -678,11 +683,16 @@ func (p *parser) typeDecl(group *Group) Decl {
 			d.Type = p.arrayType(pos, nil)
 		}
 	} else {
-		if p.tok == _Name && p.lit == "enum" {
-			return p.enumDecl(d)
-		}
 		d.Alias = p.gotAssign()
-		d.Type = p.typeOrNil()
+		if !d.Alias && p.tok == _Name && p.lit == "enum" {
+			name := p.name()
+			if p.tok == _Lbrace {
+				return p.enumDecl(d)
+			}
+			d.Type = p.qualifiedName(name)
+		} else {
+			d.Type = p.typeOrNil()
+		}
 	}
 
 	if d.Type == nil {
@@ -710,7 +720,6 @@ func (p *parser) enumDecl(header *TypeDecl) Decl {
 		TParamList: header.TParamList,
 	}
 	d.pos = header.pos
-	p.next()
 	p.want(_Lbrace)
 	p.list("enum declaration", _Semi, _Rbrace, func() bool {
 		if p.tok != _Name {
