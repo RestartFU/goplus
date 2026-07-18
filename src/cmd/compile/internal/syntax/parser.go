@@ -699,6 +699,9 @@ func (p *parser) enumDecl(header *TypeDecl) Decl {
 	if trace {
 		defer p.trace("enumDecl")()
 	}
+	if header.Group != nil {
+		p.syntaxError("enum declarations cannot be grouped")
+	}
 
 	d := &EnumDecl{
 		Pragma:     header.Pragma,

@@ -92,3 +92,10 @@ func f(enum string) string {
 		t.Fatal(err)
 	}
 }
+
+func TestGroupedEnumRejected(t *testing.T) {
+	const src = "package p; type ( E enum { A } )"
+	if _, err := Parse(NewFileBase("enum.go"), strings.NewReader(src), nil, nil, 0); err == nil {
+		t.Fatal("grouped enum declaration parsed without error")
+	}
+}

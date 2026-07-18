@@ -1087,6 +1087,13 @@ func TestParseEnumDuplicateVariant(t *testing.T) {
 	}
 }
 
+func TestGroupedEnumRejected(t *testing.T) {
+	const src = "package p; type ( E enum { A } )"
+	if _, err := ParseFile(token.NewFileSet(), "enum.go", src, 0); err == nil {
+		t.Fatal("grouped enum declaration parsed without error")
+	}
+}
+
 func TestEnumIsContextualKeyword(t *testing.T) {
 	const src = `package p
 var enum = 1
