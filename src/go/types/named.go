@@ -510,6 +510,19 @@ func enumVariant(typ Type, name string) *Named {
 	return nil
 }
 
+func enumHasVariantName(named *Named, name string) bool {
+	orig := named.Origin()
+	if orig.enumInfo == nil || orig.enumInfo.parent != orig {
+		return false
+	}
+	for _, variant := range orig.enumInfo.variants {
+		if enumVariantName(variant) == name {
+			return true
+		}
+	}
+	return false
+}
+
 func enumVariantName(variant *Named) string {
 	name := variant.Obj().Name()
 	if i := strings.LastIndexByte(name, '.'); i >= 0 {

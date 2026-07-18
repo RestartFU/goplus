@@ -360,7 +360,7 @@ func (p *parser) advance(followlist ...token) {
 		}
 	}
 
-	for !contains(followset, p.tok) {
+	for !contains(followset, p.tok) && !(contains(followset, _Enum) && p.tok == _Name && p.lit == "enum") {
 		if trace {
 			p.print("skip " + p.tok.String())
 		}
@@ -450,10 +450,6 @@ func (p *parser) fileOrNil() *File {
 			p.next()
 			f.DeclList = p.appendGroup(f.DeclList, p.typeDecl)
 
-		case _Enum:
-			p.next()
-			f.DeclList = append(f.DeclList, p.enumDecl(nil))
-
 		case _Var:
 			p.next()
 			f.DeclList = p.appendGroup(f.DeclList, p.varDecl)
@@ -463,6 +459,14 @@ func (p *parser) fileOrNil() *File {
 			if d := p.funcDeclOrNil(); d != nil {
 				f.DeclList = append(f.DeclList, d)
 			}
+
+		case _Name:
+			if p.lit == "enum" {
+				p.next()
+				f.DeclList = append(f.DeclList, p.enumDecl(nil))
+				break
+			}
+			fallthrough
 
 		default:
 			if p.tok == _Lbrace && len(f.DeclList) > 0 && isEmptyFuncDecl(f.DeclList[len(f.DeclList)-1]) {
@@ -2650,6 +2654,19 @@ func (p *parser) stmtOrNil() Stmt {
 	// Most statements (assignments) start with an identifier;
 	// look for it first before doing anything more expensive.
 	if p.tok == _Name {
+		if p.lit == "enum" {
+			pos := p.pos()
+			name := NewName(pos, p.lit)
+			p.next()
+			if p.tok == _Name {
+				s := new(DeclStmt)
+				s.pos = pos
+				s.DeclList = []Decl{p.enumDecl(nil)}
+				return s
+			}
+			lhs := p.binaryExpr(p.pexpr(name, false), 0)
+			return p.simpleStmt(p.exprListFrom(lhs), 0)
+		}
 		p.clearPragma()
 		lhs := p.exprList()
 		if label, ok := lhs.(*Name); ok && p.tok == _Colon {
@@ -2868,7 +2885,10 @@ func (p *parser) exprList() Expr {
 		defer p.trace("exprList")()
 	}
 
-	x := p.expr()
+	return p.exprListFrom(p.expr())
+}
+
+func (p *parser) exprListFrom(x Expr) Expr {
 	if p.got(_Comma) {
 		list := []Expr{x, p.expr()}
 		for p.got(_Comma) {

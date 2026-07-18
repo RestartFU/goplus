@@ -766,6 +766,10 @@ func (check *Checker) collectMethods(obj *TypeName) {
 		// spec: "For a base type, the non-blank names of methods bound
 		// to it must be unique."
 		assert(m.name != "_")
+		if base != nil && enumHasVariantName(base, m.name) {
+			check.errorf(m.pos, DuplicateMethod, "method %s.%s conflicts with enum variant %s", obj.Name(), m.name, m.name)
+			continue
+		}
 		if alt := mset.insert(m); alt != nil {
 			if alt.Pos().IsKnown() {
 				check.errorf(m.pos, DuplicateMethod, "method %s.%s already declared at %v", obj.Name(), m.name, alt.Pos())

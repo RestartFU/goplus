@@ -506,12 +506,12 @@ func (r *resolver) Visit(node ast.Node) ast.Visitor {
 		}
 
 	case *ast.EnumDecl:
-		// Enum names and variant constructors are types in the enclosing scope.
-		// Declare all of them before resolving payloads so payload fields may
-		// refer recursively to the enum or to any of its variants.
+		// The enum name is in the enclosing scope. Variants use an enum-local
+		// scope only for duplicate detection; their constructors are namespaced.
 		r.declare(n, nil, r.topScope, ast.Typ, n.Name)
+		variantScope := ast.NewScope(nil)
 		for _, variant := range n.Variants {
-			r.declare(variant, nil, r.topScope, ast.Typ, variant.Name)
+			r.declare(variant, nil, variantScope, ast.Typ, variant.Name)
 		}
 		if n.TypeParams != nil {
 			r.openScope(n.Pos())

@@ -1086,3 +1086,30 @@ func TestParseEnumDuplicateVariant(t *testing.T) {
 		t.Fatalf("duplicate variant error = %v, want redeclaration error", err)
 	}
 }
+
+func TestEnumIsContextualKeyword(t *testing.T) {
+	const src = `package p
+var enum = 1
+func f() {
+	enum := 2
+	enum++
+	_ = enum
+	enum Local { A }
+	var _ Local = A{}
+}
+`
+	if _, err := ParseFile(token.NewFileSet(), "enum.go", src, DeclarationErrors); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEnumVariantsStayNamespacedInResolver(t *testing.T) {
+	const src = `package p
+enum E { A }
+enum F { A }
+type A int
+`
+	if _, err := ParseFile(token.NewFileSet(), "enum.go", src, DeclarationErrors); err != nil {
+		t.Fatal(err)
+	}
+}

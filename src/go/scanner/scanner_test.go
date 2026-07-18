@@ -163,7 +163,7 @@ var tokens = []elt{
 	{token.DEFAULT, "default", keyword},
 	{token.DEFER, "defer", keyword},
 	{token.ELSE, "else", keyword},
-	{token.ENUM, "enum", keyword},
+	{token.IDENT, "enum", literal},
 	{token.FALLTHROUGH, "fallthrough", keyword},
 	{token.FOR, "for", keyword},
 

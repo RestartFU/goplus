@@ -89,6 +89,17 @@ func (o Result.Ok) Value() int { return o.value }
 	}
 }
 
+func TestEnumMethodVariantCollisionRejected(t *testing.T) {
+	const src = `package p
+enum Result { Ok }
+func (Result) Ok() {}
+`
+	_, err := typecheck(src, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "conflicts with enum variant Ok") {
+		t.Fatalf("method/variant collision error = %v", err)
+	}
+}
+
 func TestEnumTypeSwitch(t *testing.T) {
 	const exhaustive = `package p
 enum Result { Ok { value int }; Err { err error }; None }

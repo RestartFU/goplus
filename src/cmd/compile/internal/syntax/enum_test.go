@@ -72,3 +72,19 @@ enum Result[T any] {
 		t.Fatalf("printed enum does not parse: %v", err)
 	}
 }
+
+func TestEnumIsContextualKeyword(t *testing.T) {
+	const src = `package p
+var enum = 1
+func f() {
+	enum := 2
+	enum++
+	_ = enum
+	enum Local { A }
+	var _ Local = A{}
+}
+`
+	if _, err := Parse(NewFileBase("enum.go"), strings.NewReader(src), nil, nil, 0); err != nil {
+		t.Fatal(err)
+	}
+}

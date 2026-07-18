@@ -400,7 +400,7 @@ func assert(cond bool, msg string) {
 // is in the 'to' set, or token.EOF. For error recovery.
 func (p *parser) advance(to map[token.Token]bool) {
 	for ; p.tok != token.EOF; p.next() {
-		if to[p.tok] {
+		if to[p.tok] || to[token.ENUM] && p.tok == token.IDENT && p.lit == "enum" {
 			// Return only if parser made some progress since last
 			// sync or if it has not reached 10 advance calls without
 			// progress. Otherwise consume at least one token to
@@ -1919,6 +1919,10 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 	}
 
 	x := p.parseList(false)
+	return p.finishSimpleStmt(x, mode)
+}
+
+func (p *parser) finishSimpleStmt(x []ast.Expr, mode int) (ast.Stmt, bool) {
 
 	switch p.tok {
 	case
@@ -2432,8 +2436,29 @@ func (p *parser) parseStmt() (s ast.Stmt) {
 		defer un(trace(p, "Statement"))
 	}
 
+	if p.tok == token.IDENT && p.lit == "enum" {
+		enumPos := p.pos
+		doc := p.leadComment
+		enumIdent := &ast.Ident{NamePos: p.pos, Name: p.lit}
+		p.next()
+		if p.tok == token.IDENT {
+			return &ast.DeclStmt{Decl: p.parseEnumDecl(enumPos, doc)}
+		}
+		x := p.parseBinaryExpr(p.parsePrimaryExpr(enumIdent), token.LowestPrec+1)
+		xs := []ast.Expr{x}
+		for p.tok == token.COMMA {
+			p.next()
+			xs = append(xs, p.parseExpr())
+		}
+		s, _ = p.finishSimpleStmt(xs, labelOk)
+		if _, isLabeledStmt := s.(*ast.LabeledStmt); !isLabeledStmt {
+			p.expectSemi()
+		}
+		return s
+	}
+
 	switch p.tok {
-	case token.CONST, token.ENUM, token.TYPE, token.VAR:
+	case token.CONST, token.TYPE, token.VAR:
 		s = &ast.DeclStmt{Decl: p.parseDecl(stmtStart)}
 	case
 		// tokens that may start an expression
@@ -2841,13 +2866,11 @@ func (p *parser) parseEnumVariant() *ast.EnumVariant {
 	return variant
 }
 
-func (p *parser) parseEnumDecl() *ast.EnumDecl {
+func (p *parser) parseEnumDecl(pos token.Pos, doc *ast.CommentGroup) *ast.EnumDecl {
 	if p.trace {
 		defer un(trace(p, "EnumDecl"))
 	}
 
-	doc := p.leadComment
-	pos := p.expect(token.ENUM)
 	name := p.parseIdent()
 	var tparams *ast.FieldList
 	if p.tok == token.LBRACK {
@@ -2888,6 +2911,13 @@ func (p *parser) parseDecl(sync map[token.Token]bool) ast.Decl {
 		defer un(trace(p, "Declaration"))
 	}
 
+	if p.tok == token.IDENT && p.lit == "enum" {
+		pos := p.pos
+		doc := p.leadComment
+		p.next()
+		return p.parseEnumDecl(pos, doc)
+	}
+
 	var f parseSpecFunction
 	switch p.tok {
 	case token.IMPORT:
@@ -2901,9 +2931,6 @@ func (p *parser) parseDecl(sync map[token.Token]bool) ast.Decl {
 
 	case token.FUNC:
 		return p.parseFuncDecl()
-
-	case token.ENUM:
-		return p.parseEnumDecl()
 
 	default:
 		pos := p.pos

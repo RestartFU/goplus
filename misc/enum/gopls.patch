@@ -125,8 +125,8 @@ index 0000000..17ad99f
 +	}
 +	for _, diagnostic := range diagnostics {
 +		text := string(diagnostic.SuggestedFixes[0].TextEdits[0].NewText)
-+		if !strings.Contains(text, "case B:") || strings.Contains(text, "default:") {
-+			t.Fatalf("enum switch edit = %q, want B without duplicate default", text)
++		if !strings.Contains(text, "case B:") || strings.Contains(text, "default:") || strings.Contains(text, "case nil:") {
++			t.Fatalf("enum switch edit = %q, want B without duplicate default or nil", text)
 +		}
 +	}
 +}
@@ -258,7 +258,7 @@ index 7b1a7e8..3fc0449 100644
 +			buf.WriteByte('\t')
 +		}
 +		addDefaultCase(&buf, namedType, tag)
-+	} else if !hasNil {
++	} else if !hasNil && !hasDefault {
 +		if buf.Len() > 0 {
 +			buf.WriteByte('\t')
 +		}
@@ -293,12 +293,12 @@ index 450fcc0..8133781 100644
  		}
  
 +	case *ast.EnumDecl:
-+		// Enum names and variant constructors are types in the enclosing scope.
-+		// Declare all of them before resolving payloads so payload fields may
-+		// refer recursively to the enum or to any of its variants.
++		// The enum name is in the enclosing scope. Variants use an enum-local
++		// scope only for duplicate detection; their constructors are namespaced.
 +		r.declare(n, nil, r.topScope, ast.Typ, n.Name)
++		variantScope := ast.NewScope(nil)
 +		for _, variant := range n.Variants {
-+			r.declare(variant, nil, r.topScope, ast.Typ, variant.Name)
++			r.declare(variant, nil, variantScope, ast.Typ, variant.Name)
 +		}
 +		if n.TypeParams != nil {
 +			r.openScope(n.Pos())
