@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..17ad99f
 --- /dev/null
 +++ b/internal/analysis/fillswitch/enum_test.go
-@@ -0,0 +1,141 @@
+@@ -0,0 +1,144 @@
 +// Copyright 2026 The Go Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style
 +// license that can be found in the LICENSE file.
@@ -143,6 +143,9 @@ index 0000000..17ad99f
 +		if !strings.Contains(text, "case B:") || strings.Contains(text, "default:") || strings.Contains(text, "case nil:") {
 +			t.Fatalf("enum switch edit = %q, want B without duplicate default or nil", text)
 +		}
++		if !strings.HasSuffix(text, "\t") {
++			t.Fatalf("enum switch edit does not preserve closing-brace indentation: %q", text)
++		}
 +	}
 +}
 diff --git a/internal/analysis/fillswitch/fillswitch.go b/internal/analysis/fillswitch/fillswitch.go
@@ -279,7 +282,7 @@ index 7b1a7e8..3fc0449 100644
 +	if buf.Len() == 0 {
 +		return nil
 +	}
-+	if !inaccessible {
++	if !inaccessible || hasDefault {
 +		buf.WriteByte('\t')
 +	}
 +
