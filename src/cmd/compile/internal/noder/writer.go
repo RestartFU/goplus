@@ -2911,14 +2911,14 @@ func (c *declCollector) Visit(n syntax.Node) syntax.Visitor {
 			named := obj.Type().(*types2.Named)
 			for i := range named.NumMethods() {
 				method := named.Method(i)
-				if method.Name() != markerName {
+				if method.Name() != markerName && !strings.HasPrefix(method.Name(), markerName+".") {
 					continue
 				}
 				body := new(syntax.BlockStmt)
 				body.SetPos(variant.Pos())
 				body.Rbrace = variant.Pos()
 				decl := &syntax.FuncDecl{
-					Name: syntax.NewName(variant.Pos(), markerName),
+					Name: syntax.NewName(variant.Pos(), method.Name()),
 					Body: body,
 				}
 				decl.SetPos(variant.Pos())
