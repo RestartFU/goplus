@@ -248,7 +248,7 @@ diff --git a/internal/gcimporter/gcimporter_test.go b/internal/gcimporter/gcimpo
 index 0f08f47..769b772 100644
 --- a/internal/gcimporter/gcimporter_test.go
 +++ b/internal/gcimporter/gcimporter_test.go
-@@ -771,6 +771,130 @@ func TestIssue57015(t *testing.T) {
+@@ -771,6 +771,137 @@ func TestIssue57015(t *testing.T) {
  	compileAndImportPkg(t, "issue57015")
  }
  
@@ -260,6 +260,8 @@ index 0f08f47..769b772 100644
 +	Err { Message string }
 +}
 +type Success = Result.Ok
++
++func (result Result) Name() string { return "result" }
 +
 +type Option[T any] enum {
 +	Some { Value T }
@@ -295,6 +297,11 @@ index 0f08f47..769b772 100644
 +	}
 +	if variants := pkg2.Scope().Lookup("Result").Type().(*types.Named).EnumVariants(); len(variants) != 2 {
 +		t.Fatalf("Result has %d variants after shallow import, want 2", len(variants))
++	}
++	result := pkg2.Scope().Lookup("Result").Type().(*types.Named)
++	method, _, _ := types.LookupFieldOrMethod(result, false, pkg2, "Name")
++	if method == nil {
++		t.Fatal("enum method Name missing after shallow round trip")
 +	}
 +
 +	const consumer = `package q
@@ -391,6 +398,15 @@ index 4c9450f..599c571 100644
  //             Signature Signature
  //         }
  //     }
+@@ -812,7 +813,7 @@ func (p *iexporter) doDecl(obj types.Object) {
+ 		underlying := named.Underlying()
+ 		w.typ(underlying, obj.Pkg())
+ 
+-		if types.IsInterface(t) {
++		if types.IsInterface(t) && named.EnumType() == nil {
+ 			break
+ 		}
+ 
 @@ -824,16 +825,20 @@ func (p *iexporter) doDecl(obj types.Object) {
  			w.string(m.Name())
  			sig, _ := m.Type().(*types.Signature)
@@ -451,6 +467,15 @@ index 1ee4e93..0b73f6f 100644
  	default:
  		if version > iexportVersionGo1_18 {
  			errorf("unstable iexport format version %d, just rebuild compiler and std library", version)
+@@ -610,7 +611,7 @@ func (r *importReader) obj(pkg *types.Package, name string) {
+ 		underlying := r.p.typAt(r.uint64(), named).Underlying()
+ 		named.SetUnderlying(underlying)
+ 
+-		if !isInterface(underlying) {
++		if !isInterface(underlying) || named.EnumType() != nil {
+ 			for n := r.uint64(); n > 0; n-- {
+ 				mpos := r.pos()
+ 				mname := r.ident()
 @@ -628,7 +629,11 @@ func (r *importReader) obj(pkg *types.Package, name string) {
  						rparams[i] = types.Unalias(targs.At(i)).(*types.TypeParam)
  					}
