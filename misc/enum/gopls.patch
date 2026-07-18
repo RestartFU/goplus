@@ -1056,13 +1056,13 @@ index b2e9af7..168ada6 100644
 +		env.OpenFile("enum.go")
 +		env.OpenFile("client/client.go")
 +
-+		parent, _ := env.Hover(env.RegexpSearch("enum.go", `enum (Result)`))
-+		if !strings.Contains(parent.Value, "enum Result") || !strings.Contains(parent.Value, "Result reports success") {
++		parent, _ := env.Hover(env.RegexpSearch("enum.go", `type (Result) enum`))
++		if !strings.Contains(parent.Value, "type Result enum") || !strings.Contains(parent.Value, "Result reports success") {
 +			t.Errorf("Result hover = %q", parent.Value)
 +		}
 +
 +		variant, _ := env.Hover(env.RegexpSearch("enum.go", `\t(Ok) \{`))
-+		if !strings.Contains(variant.Value, "enum Result") || !strings.Contains(variant.Value, "Ok carries a value") || strings.Contains(variant.Value, ".enum.Result") {
++		if !strings.Contains(variant.Value, "type Result enum") || !strings.Contains(variant.Value, "Ok carries a value") || strings.Contains(variant.Value, ".enum.Result") {
 +			t.Errorf("Ok hover = %q", variant.Value)
 +		}
 +
