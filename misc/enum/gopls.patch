@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..17ad99f
 --- /dev/null
 +++ b/internal/analysis/fillswitch/enum_test.go
-@@ -0,0 +1,126 @@
+@@ -0,0 +1,141 @@
 +// Copyright 2026 The Go Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style
 +// license that can be found in the LICENSE file.
@@ -39,10 +39,17 @@ index 0000000..17ad99f
 +	None
 +}
 +
++type Empty enum {}
++
 +func use(option Option[string]) {
 +	switch option {
 +	case Some:
 +		_ = option.Value
++	}
++}
++
++func useEmpty(empty Empty) {
++	switch empty {
 +	}
 +}
 +`
@@ -62,8 +69,8 @@ index 0000000..17ad99f
 +	config := &types.Config{Error: func(error) {}}
 +	pkg, _ := config.Check("p", fset, []*ast.File{file}, info)
 +	diagnostics := fillswitch.Diagnose(file, token.NoPos, token.NoPos, pkg, info)
-+	if len(diagnostics) != 1 {
-+		t.Fatalf("got %d diagnostics, want 1", len(diagnostics))
++	if len(diagnostics) != 2 {
++		t.Fatalf("got %d diagnostics, want 2", len(diagnostics))
 +	}
 +	fix := diagnostics[0].SuggestedFixes[0]
 +	if len(fix.TextEdits) != 1 {
@@ -75,6 +82,14 @@ index 0000000..17ad99f
 +	}
 +	if !strings.HasSuffix(text, "\t") {
 +		t.Fatalf("enum switch edit does not preserve closing-brace indentation: %q", text)
++	}
++	emptyFix := diagnostics[1].SuggestedFixes[0]
++	if len(emptyFix.TextEdits) != 1 {
++		t.Fatalf("got %d empty-enum edits, want 1", len(emptyFix.TextEdits))
++	}
++	emptyText := string(emptyFix.TextEdits[0].NewText)
++	if !strings.Contains(emptyText, "case nil:") || strings.Contains(emptyText, "case None:") {
++		t.Fatalf("empty enum switch edit = %q", emptyText)
 +	}
 +}
 +
@@ -191,15 +206,12 @@ index 7b1a7e8..3fc0449 100644
  
  	existingCases := caseConsts(stmt.Body, info)
  	// Gather accessible named constants of the same type as the switch value.
-@@ -186,6 +198,92 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
+@@ -186,6 +198,89 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
  	}
  }
  
 +func suggestedFixEnumSwitch(end token.Pos, body *ast.BlockStmt, tag ast.Expr, namedType *types.Named, pkg *types.Package, info *types.Info) *analysis.SuggestedFix {
 +	variants := namedType.EnumVariants()
-+	if len(variants) == 0 {
-+		return nil
-+	}
 +
 +	var existing []types.Type
 +	hasNil := false
@@ -927,7 +939,7 @@ index 0000000..9c448bd
 +-- enum.go --
 +package example
 +
-+enum Result {
++type Result enum {
 +	Ok { Value int }
 +	Err { Message string }
 +}
@@ -967,7 +979,7 @@ index 0000000..9c448bd
 +-- enum.go --
 +package example
 +
-+enum Result {
++type Result enum {
 +	Ok { Value int }
 +	Err { Message string }
 +}
@@ -1010,7 +1022,7 @@ index b2e9af7..168ada6 100644
 +package p
 +
 +// Result reports success or failure.
-+enum Result {
++type Result enum {
 +	// Ok carries a value.
 +	Ok { Value int }
 +	Err { Message string }
