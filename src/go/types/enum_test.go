@@ -32,7 +32,14 @@ enum Result {
 	None
 }
 
-func (o Ok) Value() int { return o.value }
+func (r Result) Value() int {
+	switch r {
+	case Ok: return r.value
+	case Err: return -1
+	case None, nil: return 0
+	}
+	return 0
+}
 func makeResult() Result { return Ok{value: 42} }
 `
 	pkg, err := checkEnumPackage(t, src)
@@ -58,8 +65,11 @@ func makeResult() Result { return Ok{value: 42} }
 	if fields := ok.Underlying().(*types.Struct); fields.NumFields() != 1 || fields.Field(0).Name() != "value" {
 		t.Fatalf("Ok fields = %s, want value int", fields)
 	}
-	if method, _, _ := types.LookupFieldOrMethod(ok, true, pkg, "Value"); method == nil {
-		t.Error("method declared on variant Ok was not collected")
+	if method, _, _ := types.LookupFieldOrMethod(result, true, pkg, "Value"); method == nil {
+		t.Error("method declared on enum Result was not collected")
+	}
+	if method, _, _ := types.LookupFieldOrMethod(ok, true, pkg, "Value"); method != nil {
+		t.Error("enum method Value unexpectedly belongs to variant Ok")
 	}
 	variants := result.EnumVariants()
 	if len(variants) != 3 || variants[0].Obj().Name() != "Ok" || variants[1].Obj().Name() != "Err" || variants[2].Obj().Name() != "None" {
@@ -70,6 +80,17 @@ func makeResult() Result { return Ok{value: 42} }
 	}
 	if types.AssignableTo(types.NewPointer(ok), result) {
 		t.Error("*Ok is assignable to Result")
+	}
+}
+
+func TestEnumVariantReceiverRejected(t *testing.T) {
+	const src = `package p
+enum Result { Ok { value int }; Err }
+func (o Ok) Value() int { return o.value }
+`
+	_, err := checkEnumPackage(t, src)
+	if err == nil || !strings.Contains(err.Error(), "cannot define method on enum variant Ok; use enum type Result as receiver") {
+		t.Fatalf("variant receiver error = %v", err)
 	}
 }
 
@@ -154,6 +175,14 @@ enum Option[T any] {
 	None
 }
 
+func (o Option[T]) Or(zero T) T {
+	switch o {
+	case Some[T]: return o.value
+	case None[T], nil: return zero
+	}
+	return zero
+}
+
 var _ Option[int] = Some[int]{value: 1}
 `
 	pkg, err := checkEnumPackage(t, src)
@@ -171,6 +200,9 @@ var _ Option[int] = Some[int]{value: 1}
 	}
 	if fieldType := some.Underlying().(*types.Struct).Field(0).Type(); fieldType != someParam {
 		t.Fatalf("Some.value type = %v, want Some type parameter %v", fieldType, someParam)
+	}
+	if method, _, _ := types.LookupFieldOrMethod(option, true, pkg, "Or"); method == nil {
+		t.Fatal("generic enum method Or was not collected")
 	}
 	marker := some.Method(0).Type().(*types.Signature)
 	recv := marker.Recv().Type().(*types.Named)

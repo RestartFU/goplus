@@ -17,7 +17,27 @@ enum Option[T any] {
 	Nothing
 }
 
-func (o Ok) Value() int { return o.value }
+func (o Option[T]) Or(zero T) T {
+	switch o {
+	case Some[T]:
+		return o.value
+	case Nothing[T], nil:
+		return zero
+	}
+	return zero
+}
+
+func (r Result) Value() int {
+	switch r {
+	case Ok:
+		return r.value
+	case Err:
+		return -1
+	case None, nil:
+		return 0
+	}
+	return 0
+}
 
 func inspect(result Result) int {
 	switch result {
@@ -45,12 +65,12 @@ func unwrap[T any](option Option[T], zero T) T {
 
 func main() {
 	var result Result = Ok{value: 42}
-	if inspect(result) != 42 || result.(Ok).Value() != 42 {
+	if inspect(result) != 42 || result.Value() != 42 {
 		panic("non-generic enum")
 	}
 
 	var option Option[string] = Some[string]{value: "ok"}
-	if unwrap(option, "bad") != "ok" {
+	if unwrap(option, "bad") != "ok" || option.Or("bad") != "ok" {
 		panic("generic enum")
 	}
 

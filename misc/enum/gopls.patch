@@ -719,18 +719,18 @@ index b2e9af7b91..d2f17c79b4 100644
 +	Err { Message string }
 +}
 +
-+func (ok Ok) Or(fallback int) int { return ok.Value }
-+
-+func use(result Result) int {
++func (result Result) Or(fallback int) int {
 +	switch result {
 +	case Ok:
-+		return result.Or(1)
-+	case Err:
-+		return len(result.Message)
-+	case nil:
-+		return 0
++		return result.Value
++	case Err, nil:
++		return fallback
 +	}
-+	return 0
++	return fallback
++}
++
++func use(result Result) int {
++	return result.Or(1)
 +}
 +`
 +	WithOptions(Modes(Default)).Run(t, source, func(t *testing.T, env *Env) {

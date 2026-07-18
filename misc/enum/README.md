@@ -13,6 +13,10 @@ methods are hidden from editor surfaces. The x/tools patch also teaches SSA,
 CFG, satisfy, and inline analysis about enum switches and local enum
 declarations, and supports shallow export of Go 1.28 generic methods.
 
+Methods belong to the enum type itself, never to an individual variant. A
+method that needs variant fields switches on its enum receiver and uses the
+case-narrowed receiver inside each arm.
+
 They were verified with x/tools commit `635ae9663724` and gopls v0.22.0:
 
 ```sh
