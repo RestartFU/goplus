@@ -14,6 +14,12 @@ BSD-style license found in the LICENSE file.
 
 ### Download and Install
 
+For this fork's first-class enums and matching editor tools, run
+[`install-goplus.sh`](install-goplus.sh) on Linux or
+[`install-goplus.ps1`](install-goplus.ps1) on Windows. They install an isolated
+Go+ toolchain with `go+`, `gofmt+`, `gopls+`, and `goimports+`; see
+[`misc/enum/README.md`](misc/enum/README.md) for options.
+
 #### Binary Distributions
 
 Official binary distributions are available at https://go.dev/dl/.

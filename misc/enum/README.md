@@ -1,5 +1,36 @@
 # Enum-aware gopls
 
+## Install Go+
+
+The repository installers build a private full GOROOT and the patched editor
+tooling. They expose four commands without replacing an existing Go install:
+`go+`, `gofmt+`, `gopls+`, and `goimports+`. The `gopls+` and `goimports+`
+launchers always use the private Go+ toolchain.
+
+On Linux:
+
+```sh
+./install-goplus.sh
+```
+
+The default GOROOT is `$HOME/.local/share/goplus/go`, with command links in
+`$HOME/.local/bin`. Use `--prefix` and `--bin-dir` to change them.
+
+On Windows PowerShell:
+
+```powershell
+.\install-goplus.ps1
+```
+
+The default installation is `%LOCALAPPDATA%\GoPlus`. The installer adds its
+`bin` directory to the user PATH; pass `-NoPathUpdate` to skip that change.
+Use `-Prefix C:\path\to\GoPlus` for a custom location.
+
+Both installers require Git and a working Go bootstrap toolchain. They build
+this checkout, fetch the pinned x/tools and gopls sources listed below, apply
+the compatibility patches, build all four commands, and verify `go+` and
+`gopls+` before replacing a previous Go+ installation.
+
 The Go repository does not contain the gopls module. To build gopls against
 this fork, apply both companion patches to compatible `golang.org/x/tools`
 and `golang.org/x/tools/gopls` checkouts, then build gopls with this fork as
