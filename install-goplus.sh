@@ -144,9 +144,11 @@ if ! mv -- "$stage" "$prefix"; then
 fi
 [[ -z $backup ]] || rm -rf -- "$backup"
 
-for name in go+ gofmt+ gopls+ goimports+; do
-	ln -sfn "$prefix/bin/$name" "$bin_dir/$name"
-done
+if [[ $bin_dir != "$prefix/bin" ]]; then
+	for name in go+ gofmt+ gopls+ goimports+; do
+		ln -sfn "$prefix/bin/$name" "$bin_dir/$name"
+	done
+fi
 
 echo
 echo "Go+ installed in $prefix"
