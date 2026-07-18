@@ -203,7 +203,7 @@ index adb04cd..54281cb 100644
 +func TestEnumSwitch(t *testing.T) {
 +	const input = `package p
 +
-+enum Result {
++type Result enum {
 +	Ok { Value int }
 +	Err { Message string }
 +}
@@ -255,7 +255,7 @@ index 0f08f47..769b772 100644
 +func TestShallowEnum(t *testing.T) {
 +	const src = `package p
 +
-+enum Result {
++type Result enum {
 +	Ok { Value int }
 +	Err { Message string }
 +}
