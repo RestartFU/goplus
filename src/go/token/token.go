@@ -103,6 +103,7 @@ const (
 	DEFAULT
 	DEFER
 	ELSE
+	ENUM
 	FALLTHROUGH
 	FOR
 
@@ -209,6 +210,7 @@ var tokens = [...]string{
 	DEFAULT:     "default",
 	DEFER:       "defer",
 	ELSE:        "else",
+	ENUM:        "enum",
 	FALLTHROUGH: "fallthrough",
 	FOR:         "for",
 

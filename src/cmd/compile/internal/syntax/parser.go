@@ -327,6 +327,7 @@ const stopset uint64 = 1<<_Break |
 	1<<_Const |
 	1<<_Continue |
 	1<<_Defer |
+	1<<_Enum |
 	1<<_Fallthrough |
 	1<<_For |
 	1<<_Go |
@@ -449,6 +450,10 @@ func (p *parser) fileOrNil() *File {
 			p.next()
 			f.DeclList = p.appendGroup(f.DeclList, p.typeDecl)
 
+		case _Enum:
+			p.next()
+			f.DeclList = append(f.DeclList, p.enumDecl(nil))
+
 		case _Var:
 			p.next()
 			f.DeclList = p.appendGroup(f.DeclList, p.varDecl)
@@ -466,7 +471,7 @@ func (p *parser) fileOrNil() *File {
 			} else {
 				p.syntaxError("non-declaration statement outside function body")
 			}
-			p.advance(_Import, _Const, _Type, _Var, _Func)
+			p.advance(_Import, _Const, _Type, _Enum, _Var, _Func)
 			continue
 		}
 
@@ -476,7 +481,7 @@ func (p *parser) fileOrNil() *File {
 
 		if p.tok != _EOF && !p.got(_Semi) {
 			p.syntaxError("after top level declaration")
-			p.advance(_Import, _Const, _Type, _Var, _Func)
+			p.advance(_Import, _Const, _Type, _Enum, _Var, _Func)
 		}
 	}
 	// p.tok == _EOF
@@ -685,6 +690,47 @@ func (p *parser) typeDecl(group *Group) Decl {
 		p.advance(_Semi, _Rparen)
 	}
 
+	return d
+}
+
+// EnumDecl = "enum" identifier [ TypeParams ] "{" { EnumVariant ";" } "}" .
+func (p *parser) enumDecl(_ *Group) Decl {
+	if trace {
+		defer p.trace("enumDecl")()
+	}
+
+	d := new(EnumDecl)
+	d.pos = p.pos()
+	d.Pragma = p.takePragma()
+	d.Name = p.name()
+	if p.got(_Lbrack) {
+		d.TParamList = p.paramList(nil, nil, _Rbrack, true, false)
+	}
+	p.want(_Lbrace)
+	p.list("enum declaration", _Semi, _Rbrace, func() bool {
+		if p.tok != _Name {
+			p.syntaxError("expected variant name")
+			p.advance(_Semi, _Rbrace)
+			return false
+		}
+
+		v := new(EnumVariant)
+		v.pos = p.pos()
+		v.Name = p.name()
+		if p.got(_Lbrace) {
+			v.HasPayload = true
+			payload := new(StructType)
+			payload.pos = v.pos
+			p.list("enum variant payload", _Semi, _Rbrace, func() bool {
+				p.fieldDecl(payload)
+				return false
+			})
+			v.FieldList = payload.FieldList
+			v.TagList = payload.TagList
+		}
+		d.VariantList = append(d.VariantList, v)
+		return false
+	})
 	return d
 }
 
@@ -2621,6 +2667,9 @@ func (p *parser) stmtOrNil() Stmt {
 
 	case _Type:
 		return p.declStmt(p.typeDecl)
+
+	case _Enum:
+		return p.declStmt(p.enumDecl)
 	}
 
 	p.clearPragma()

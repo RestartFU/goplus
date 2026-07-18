@@ -505,6 +505,28 @@ func (r *resolver) Visit(node ast.Node) ast.Visitor {
 			r.declare(n, nil, r.pkgScope, ast.Fun, n.Name)
 		}
 
+	case *ast.EnumDecl:
+		// Enum names and variant constructors are types in the enclosing scope.
+		// Declare all of them before resolving payloads so payload fields may
+		// refer recursively to the enum or to any of its variants.
+		r.declare(n, nil, r.topScope, ast.Typ, n.Name)
+		for _, variant := range n.Variants {
+			r.declare(variant, nil, r.topScope, ast.Typ, variant.Name)
+		}
+		if n.TypeParams != nil {
+			r.openScope(n.Pos())
+			defer r.closeScope()
+			r.walkTParams(n.TypeParams)
+		}
+		for _, variant := range n.Variants {
+			if variant.Fields == nil {
+				continue
+			}
+			r.openScope(variant.Pos())
+			r.walkFieldList(variant.Fields, ast.Var)
+			r.closeScope()
+		}
+
 	default:
 		return r
 	}

@@ -82,8 +82,9 @@ type pkgWriter struct {
 
 	// Maps from types2.Objects back to their syntax.Decl.
 
-	funDecls map[*types2.Func]*syntax.FuncDecl
-	typDecls map[*types2.TypeName]typeDeclGen
+	funDecls    map[*types2.Func]*syntax.FuncDecl
+	typDecls    map[*types2.TypeName]typeDeclGen
+	enumMethods []enumMethod
 
 	// linknames maps package-scope objects to their linker symbol name,
 	// if specified by a //go:linkname or //go:linknamestd directive.
@@ -1527,7 +1528,7 @@ func (w *writer) declStmt(decl syntax.Decl) {
 	default:
 		w.p.unexpected("declaration", decl)
 
-	case *syntax.ConstDecl, *syntax.TypeDecl:
+	case *syntax.ConstDecl, *syntax.TypeDecl, *syntax.EnumDecl:
 
 	case *syntax.VarDecl:
 		w.assignStmt(decl, namesAsExpr(decl.NameList), decl.Values)
@@ -1705,19 +1706,39 @@ func (w *writer) switchStmt(stmt *syntax.SwitchStmt) {
 
 	var iface, tagType types2.Type
 	var tagTypeIsChan bool
-	if guard, ok := stmt.Tag.(*syntax.TypeSwitchGuard); w.Bool(ok) {
-		iface = w.p.typeOf(guard.X)
+	guard, typeSwitch := stmt.Tag.(*syntax.TypeSwitchGuard)
+	var enumTag *syntax.Name
+	if !typeSwitch && stmt.Tag != nil {
+		enumTag, _ = syntax.Unparen(stmt.Tag).(*syntax.Name)
+		if enumTag != nil {
+			named, _ := types2.Unalias(w.p.typeOf(enumTag)).(*types2.Named)
+			typeSwitch = named != nil && named.EnumType() != nil && named.EnumType().Origin() == named.Origin()
+		}
+	}
+	if w.Bool(typeSwitch) {
+		if guard != nil {
+			iface = w.p.typeOf(guard.X)
 
-		w.pos(guard)
-		if tag := guard.Lhs; w.Bool(tag != nil) {
-			w.pos(tag)
+			w.pos(guard)
+			if tag := guard.Lhs; w.Bool(tag != nil) {
+				w.pos(tag)
 
-			// Like w.localIdent, but we don't have a types2.Object.
+				// Like w.localIdent, but we don't have a types2.Object.
+				w.Sync(pkgbits.SyncLocalIdent)
+				w.pkg(w.p.curpkg)
+				w.String(tag.Value)
+			}
+			w.expr(guard.X)
+		} else {
+			iface = w.p.typeOf(enumTag)
+			w.pos(enumTag)
+			w.Bool(true)
+			w.pos(enumTag)
 			w.Sync(pkgbits.SyncLocalIdent)
 			w.pkg(w.p.curpkg)
-			w.String(tag.Value)
+			w.String(enumTag.Value)
+			w.expr(enumTag)
 		}
-		w.expr(guard.X)
 	} else {
 		tag := stmt.Tag
 
@@ -2774,11 +2795,16 @@ func (w *writer) op(op ir.Op) {
 // particularly sensitive to it.
 
 type typeDeclGen struct {
-	*syntax.TypeDecl
-	gen int
+	Pragma syntax.Pragma
+	gen    int
 
 	// Implicit type parameters in scope at this type declaration.
 	implicits []*types2.TypeParam
+}
+
+type enumMethod struct {
+	recv   *types2.Named
+	method *types2.Func
 }
 
 type fileImports struct {
@@ -2843,7 +2869,7 @@ func (c *declCollector) Visit(n syntax.Node) syntax.Visitor {
 
 	case *syntax.TypeDecl:
 		obj := pw.info.Defs[n.Name].(*types2.TypeName)
-		d := typeDeclGen{TypeDecl: n, implicits: c.implicits}
+		d := typeDeclGen{Pragma: n.Pragma, implicits: c.implicits}
 
 		if n.Alias {
 			pw.checkPragmas(n.Pragma, 0, false)
@@ -2864,6 +2890,46 @@ func (c *declCollector) Visit(n syntax.Node) syntax.Visitor {
 		// type declarations, but types2 the function literals will be
 		// constant folded away.
 		return c.withTParams(obj)
+
+	case *syntax.EnumDecl:
+		pw.checkPragmas(n.Pragma, 0, false)
+
+		registerType := func(name *syntax.Name) *types2.TypeName {
+			obj := pw.info.Defs[name].(*types2.TypeName)
+			d := typeDeclGen{Pragma: n.Pragma, implicits: c.implicits}
+			if c.withinFunc {
+				*c.typegen++
+				d.gen = *c.typegen
+			}
+			pw.typDecls[obj] = d
+			return obj
+		}
+
+		registerType(n.Name)
+		markerName := ".enum." + n.Name.Value
+		for _, variant := range n.VariantList {
+			obj := registerType(variant.Name)
+			named := obj.Type().(*types2.Named)
+			for i := range named.NumMethods() {
+				method := named.Method(i)
+				if method.Name() != markerName {
+					continue
+				}
+				body := new(syntax.BlockStmt)
+				body.SetPos(variant.Pos())
+				body.Rbrace = variant.Pos()
+				decl := &syntax.FuncDecl{
+					Name: syntax.NewName(variant.Pos(), markerName),
+					Body: body,
+				}
+				decl.SetPos(variant.Pos())
+				pw.funDecls[method] = decl
+				pw.enumMethods = append(pw.enumMethods, enumMethod{named, method})
+				break
+			}
+		}
+
+		return c.withTParams(pw.info.Defs[n.Name])
 
 	case *syntax.VarDecl:
 		pw.checkPragmas(n.Pragma, 0, true)
@@ -2965,6 +3031,14 @@ func (w *writer) pkgInit(noders []*noder) {
 			w.pkgDecl(decl)
 		}
 	}
+	for _, synthetic := range w.p.enumMethods {
+		if synthetic.method.Type().(*types2.Signature).RecvTypeParams().Len() != 0 {
+			continue // generic methods are instantiated on demand
+		}
+		w.Code(declMethod)
+		w.typ(synthetic.recv)
+		w.selector(synthetic.method)
+	}
 	w.Code(declEnd)
 
 	w.Sync(pkgbits.SyncEOF)
@@ -3033,6 +3107,19 @@ func (w *writer) pkgDecl(decl syntax.Decl) {
 
 		w.Code(declOther)
 		w.pkgObjs(decl.Name)
+
+	case *syntax.EnumDecl:
+		if len(decl.TParamList) != 0 {
+			break // skip generic type decls
+		}
+
+		names := make([]*syntax.Name, 1, 1+len(decl.VariantList))
+		names[0] = decl.Name
+		for _, variant := range decl.VariantList {
+			names = append(names, variant.Name)
+		}
+		w.Code(declOther)
+		w.pkgObjs(names...)
 
 	case *syntax.VarDecl:
 		w.Code(declVar)

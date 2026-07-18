@@ -431,6 +431,7 @@ var stmtStart = map[token.Token]bool{
 	token.CONST:       true,
 	token.CONTINUE:    true,
 	token.DEFER:       true,
+	token.ENUM:        true,
 	token.FALLTHROUGH: true,
 	token.FOR:         true,
 	token.GO:          true,
@@ -446,6 +447,7 @@ var stmtStart = map[token.Token]bool{
 var declStart = map[token.Token]bool{
 	token.IMPORT: true,
 	token.CONST:  true,
+	token.ENUM:   true,
 	token.TYPE:   true,
 	token.VAR:    true,
 }
@@ -2431,7 +2433,7 @@ func (p *parser) parseStmt() (s ast.Stmt) {
 	}
 
 	switch p.tok {
-	case token.CONST, token.TYPE, token.VAR:
+	case token.CONST, token.ENUM, token.TYPE, token.VAR:
 		s = &ast.DeclStmt{Decl: p.parseDecl(stmtStart)}
 	case
 		// tokens that may start an expression
@@ -2818,6 +2820,69 @@ func (p *parser) parseFuncDecl() *ast.FuncDecl {
 	return decl
 }
 
+func (p *parser) parseEnumVariant() *ast.EnumVariant {
+	if p.trace {
+		defer un(trace(p, "EnumVariant"))
+	}
+
+	doc := p.leadComment
+	name := p.parseIdent()
+	variant := &ast.EnumVariant{Doc: doc, Name: name}
+	if p.tok == token.LBRACE {
+		lbrace := p.expect(token.LBRACE)
+		var fields []*ast.Field
+		for p.tok == token.IDENT || p.tok == token.MUL || p.tok == token.LPAREN {
+			fields = append(fields, p.parseFieldDecl())
+		}
+		rbrace := p.expect(token.RBRACE)
+		variant.Fields = &ast.FieldList{Opening: lbrace, List: fields, Closing: rbrace}
+	}
+	variant.Comment = p.expectSemi()
+	return variant
+}
+
+func (p *parser) parseEnumDecl() *ast.EnumDecl {
+	if p.trace {
+		defer un(trace(p, "EnumDecl"))
+	}
+
+	doc := p.leadComment
+	pos := p.expect(token.ENUM)
+	name := p.parseIdent()
+	var tparams *ast.FieldList
+	if p.tok == token.LBRACK {
+		tparams = p.parseTypeParameters()
+	}
+	lbrace := p.expect(token.LBRACE)
+	var variants []*ast.EnumVariant
+	for p.tok != token.RBRACE && p.tok != token.EOF {
+		if p.tok == token.SEMICOLON {
+			p.next()
+			continue
+		}
+		if p.tok != token.IDENT {
+			p.errorExpected(p.pos, "variant name")
+			p.advance(exprEnd)
+			if p.tok == token.SEMICOLON {
+				p.next()
+			}
+			continue
+		}
+		variants = append(variants, p.parseEnumVariant())
+	}
+	rbrace := p.expect(token.RBRACE)
+	p.expectSemi()
+	return &ast.EnumDecl{
+		Doc:        doc,
+		Enum:       pos,
+		Name:       name,
+		TypeParams: tparams,
+		Lbrace:     lbrace,
+		Variants:   variants,
+		Rbrace:     rbrace,
+	}
+}
+
 func (p *parser) parseDecl(sync map[token.Token]bool) ast.Decl {
 	if p.trace {
 		defer un(trace(p, "Declaration"))
@@ -2836,6 +2901,9 @@ func (p *parser) parseDecl(sync map[token.Token]bool) ast.Decl {
 
 	case token.FUNC:
 		return p.parseFuncDecl()
+
+	case token.ENUM:
+		return p.parseEnumDecl()
 
 	default:
 		pos := p.pos

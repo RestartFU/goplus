@@ -1,0 +1,564 @@
+diff --git a/go/ast/edge/edge.go b/go/ast/edge/edge.go
+index 8dc4dd1502..da7bfae61d 100644
+--- a/go/ast/edge/edge.go
++++ b/go/ast/edge/edge.go
+@@ -165,6 +165,14 @@ const (
+ 	ValueSpec_Names
+ 	ValueSpec_Type
+ 	ValueSpec_Values
++	EnumDecl_Doc
++	EnumDecl_Name
++	EnumDecl_TypeParams
++	EnumDecl_Variants
++	EnumVariant_Comment
++	EnumVariant_Doc
++	EnumVariant_Fields
++	EnumVariant_Name
+ 
+ 	maxKind
+ )
+@@ -296,4 +304,12 @@ var fieldInfos = [...]fieldInfo{
+ 	ValueSpec_Names:       info[*ast.ValueSpec]("Names"),
+ 	ValueSpec_Type:        info[*ast.ValueSpec]("Type"),
+ 	ValueSpec_Values:      info[*ast.ValueSpec]("Values"),
++	EnumDecl_Doc:          info[*ast.EnumDecl]("Doc"),
++	EnumDecl_Name:         info[*ast.EnumDecl]("Name"),
++	EnumDecl_TypeParams:   info[*ast.EnumDecl]("TypeParams"),
++	EnumDecl_Variants:     info[*ast.EnumDecl]("Variants"),
++	EnumVariant_Comment:   info[*ast.EnumVariant]("Comment"),
++	EnumVariant_Doc:       info[*ast.EnumVariant]("Doc"),
++	EnumVariant_Fields:    info[*ast.EnumVariant]("Fields"),
++	EnumVariant_Name:      info[*ast.EnumVariant]("Name"),
+ }
+diff --git a/go/ast/inspector/typeof.go b/go/ast/inspector/typeof.go
+index 9852331a3d..8fed1a5f6a 100644
+--- a/go/ast/inspector/typeof.go
++++ b/go/ast/inspector/typeof.go
+@@ -71,6 +71,8 @@ const (
+ 	nTypeSwitchStmt
+ 	nUnaryExpr
+ 	nValueSpec
++	nEnumDecl
++	nEnumVariant
+ )
+ 
+ // typeOf returns a distinct single-bit value that represents the type of n.
+@@ -211,6 +213,10 @@ func typeOf(n ast.Node) uint64 {
+ 		return 1 << nUnaryExpr
+ 	case *ast.ValueSpec:
+ 		return 1 << nValueSpec
++	case *ast.EnumDecl:
++		return 1 << nEnumDecl
++	case *ast.EnumVariant:
++		return 1 << nEnumVariant
+ 	}
+ 	return 0
+ }
+diff --git a/go/ast/inspector/walk.go b/go/ast/inspector/walk.go
+index 5f1c93c8a7..2944e39c55 100644
+--- a/go/ast/inspector/walk.go
++++ b/go/ast/inspector/walk.go
+@@ -309,6 +309,28 @@ func walk(v *visitor, ek edge.Kind, index int, node ast.Node) {
+ 		}
+ 		walkList(v, edge.GenDecl_Specs, n.Specs)
+ 
++	case *ast.EnumDecl:
++		if n.Doc != nil {
++			walk(v, edge.EnumDecl_Doc, -1, n.Doc)
++		}
++		walk(v, edge.EnumDecl_Name, -1, n.Name)
++		if n.TypeParams != nil {
++			walk(v, edge.EnumDecl_TypeParams, -1, n.TypeParams)
++		}
++		walkList(v, edge.EnumDecl_Variants, n.Variants)
++
++	case *ast.EnumVariant:
++		if n.Doc != nil {
++			walk(v, edge.EnumVariant_Doc, -1, n.Doc)
++		}
++		walk(v, edge.EnumVariant_Name, -1, n.Name)
++		if n.Fields != nil {
++			walk(v, edge.EnumVariant_Fields, -1, n.Fields)
++		}
++		if n.Comment != nil {
++			walk(v, edge.EnumVariant_Comment, -1, n.Comment)
++		}
++
+ 	case *ast.FuncDecl:
+ 		if n.Doc != nil {
+ 			walk(v, edge.FuncDecl_Doc, -1, n.Doc)
+diff --git a/go/cfg/builder.go b/go/cfg/builder.go
+index f16cd42309..305aabe2cd 100644
+--- a/go/cfg/builder.go
++++ b/go/cfg/builder.go
+@@ -53,7 +53,10 @@ start:
+ 
+ 	case *ast.DeclStmt:
+ 		// Treat each var ValueSpec as a separate statement.
+-		d := s.Decl.(*ast.GenDecl)
++		d, ok := s.Decl.(*ast.GenDecl)
++		if !ok {
++			break // local enum or another declaration with no control-flow effect
++		}
+ 		if d.Tok == token.VAR {
+ 			for _, spec := range d.Specs {
+ 				if spec, ok := spec.(*ast.ValueSpec); ok {
+diff --git a/go/ssa/builder.go b/go/ssa/builder.go
+index 242074925c..c900317dbb 100644
+--- a/go/ssa/builder.go
++++ b/go/ssa/builder.go
+@@ -1432,6 +1432,13 @@ func (b *builder) compLit(fn *Function, addr Value, e *ast.CompositeLit, isZero
+ // switchStmt emits to fn code for the switch statement s, optionally
+ // labelled by label.
+ func (b *builder) switchStmt(fn *Function, s *ast.SwitchStmt, label *lblock) {
++	if s.Tag != nil {
++		if named, _ := types.Unalias(fn.typeOf(s.Tag)).(*types.Named); named != nil && named.EnumType() != nil && named.EnumType().Origin() == named.Origin() {
++			b.enumSwitchStmt(fn, s, label)
++			return
++		}
++	}
++
+ 	// We treat SwitchStmt like a sequential if-else chain.
+ 	// Multiway dispatch can be recovered later by ssautil.Switches()
+ 	// to those cases that are free of side effects.
+@@ -1515,6 +1522,58 @@ func (b *builder) switchStmt(fn *Function, s *ast.SwitchStmt, label *lblock) {
+ 	fn.currentBlock = done
+ }
+ 
++// enumSwitchStmt emits an ordinary switch over an enum as a sequence of type
++// tests. go/types records the narrowed tag variable as each clause's implicit
++// variable, just as it does for a type switch.
++func (b *builder) enumSwitchStmt(fn *Function, s *ast.SwitchStmt, label *lblock) {
++	if s.Init != nil {
++		b.stmt(fn, s.Init)
++	}
++	x := b.expr(fn, s.Tag)
++	done := fn.newBasicBlock("enumswitch.done")
++	if label != nil {
++		label._break = done
++	}
++	var default_ *ast.CaseClause
++	for _, clause := range s.Body.List {
++		cc := clause.(*ast.CaseClause)
++		if cc.List == nil {
++			default_ = cc
++			continue
++		}
++		body := fn.newBasicBlock("enumswitch.body")
++		var next *BasicBlock
++		var narrowed Value
++		for _, cond := range cc.List {
++			next = fn.newBasicBlock("enumswitch.next")
++			caseType := fn.typeOf(cond)
++			var condition Value
++			if caseType == tUntypedNil {
++				condition = emitCompare(fn, token.EQL, x, zeroConst(x.Type()), cond.Pos())
++				narrowed = x
++			} else {
++				test := emitTypeTest(fn, x, caseType, cc.Case)
++				narrowed = emitExtract(fn, test, 0)
++				condition = emitExtract(fn, test, 1)
++			}
++			emitIf(fn, condition, body, next)
++			fn.currentBlock = next
++		}
++		if len(cc.List) != 1 {
++			narrowed = x
++		}
++		fn.currentBlock = body
++		b.typeCaseBody(fn, cc, narrowed, done)
++		fn.currentBlock = next
++	}
++	if default_ != nil {
++		b.typeCaseBody(fn, default_, x, done)
++	} else {
++		emitJump(fn, done)
++	}
++	fn.currentBlock = done
++}
++
+ // typeSwitchStmt emits to fn code for the type switch statement s, optionally
+ // labelled by label.
+ func (b *builder) typeSwitchStmt(fn *Function, s *ast.TypeSwitchStmt, label *lblock) {
+@@ -2697,7 +2756,10 @@ start:
+ 		// ignore.  (Usually removed by gofmt.)
+ 
+ 	case *ast.DeclStmt: // Con, Var or Typ
+-		d := s.Decl.(*ast.GenDecl)
++		d, ok := s.Decl.(*ast.GenDecl)
++		if !ok {
++			break // local enum or another declaration with no runtime effect
++		}
+ 		if d.Tok == token.VAR {
+ 			for _, spec := range d.Specs {
+ 				if vs, ok := spec.(*ast.ValueSpec); ok {
+diff --git a/go/ssa/builder_test.go b/go/ssa/builder_test.go
+index adb04cde7f..54281cb0f7 100644
+--- a/go/ssa/builder_test.go
++++ b/go/ssa/builder_test.go
+@@ -34,6 +34,47 @@ import (
+ 
+ func isEmpty(f *ssa.Function) bool { return f.Blocks == nil }
+ 
++func TestEnumSwitch(t *testing.T) {
++	const input = `package p
++
++enum Result {
++	Ok { Value int }
++	Err { Message string }
++}
++
++func value(result Result) int {
++	switch result {
++	case Ok:
++		return result.Value
++	case Err:
++		return len(result.Message)
++	case nil:
++		return 0
++	}
++	return 0
++}
++
++func local() {
++	enum Local { One; Two }
++	var value Local
++	switch value {
++	case One:
++	case Two:
++	case nil:
++	}
++}
++`
++	fset := token.NewFileSet()
++	file, err := parser.ParseFile(fset, "p.go", input, 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	_, _, err = ssautil.BuildPackage(&types.Config{}, fset, types.NewPackage("p", "p"), []*ast.File{file}, ssa.SanityCheckFunctions)
++	if err != nil {
++		t.Fatal(err)
++	}
++}
++
+ // Tests that programs partially loaded from gc object files contain
+ // functions with no code for the external portions, but are otherwise ok.
+ func TestBuildPackage(t *testing.T) {
+diff --git a/internal/gcimporter/gcimporter_test.go b/internal/gcimporter/gcimporter_test.go
+index 0f08f477fc..32b212eb84 100644
+--- a/internal/gcimporter/gcimporter_test.go
++++ b/internal/gcimporter/gcimporter_test.go
+@@ -771,6 +771,124 @@ func TestIssue57015(t *testing.T) {
+ 	compileAndImportPkg(t, "issue57015")
+ }
+ 
++func TestShallowEnum(t *testing.T) {
++	const src = `package p
++
++enum Result {
++	Ok { Value int }
++	Err { Message string }
++}
++
++enum Option[T any] {
++	Some { Value T }
++	None
++}
++`
++	fset := token.NewFileSet()
++	f, err := goparser.ParseFile(fset, "p.go", src, 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	pkg1, err := new(types.Config).Check("p", fset, []*ast.File{f}, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	data, err := gcimporter.IExportShallow(fset, pkg1, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	pkg2, err := gcimporter.IImportShallow(fset, gcimporter.GetPackagesFromMap(make(map[string]*types.Package)), data, "p", nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, name := range []string{"Result", "Ok", "Err", "Option", "Some", "None"} {
++		obj, _ := pkg2.Scope().Lookup(name).(*types.TypeName)
++		if obj == nil {
++			t.Fatalf("missing %s", name)
++		}
++		named := types.Unalias(obj.Type()).(*types.Named)
++		if named.EnumType() == nil {
++			t.Errorf("%s lost enum metadata; underlying=%s methods=%d", name, named.Underlying(), named.NumMethods())
++		}
++	}
++
++	const consumer = `package q
++import "p"
++func use(r p.Result) {
++	switch r {
++	case p.Ok:
++		_ = r.Value
++	case p.Err:
++		_ = r.Message
++	case nil:
++	}
++}
++`
++	consumerFile, err := goparser.ParseFile(fset, "q.go", consumer, 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	info := &types.Info{Uses: make(map[*ast.Ident]types.Object)}
++	config := &types.Config{Importer: importerFunc(func(path string) (*types.Package, error) {
++		if path == "p" {
++			return pkg2, nil
++		}
++		return nil, fmt.Errorf("unexpected import %q", path)
++	})}
++	if _, err := config.Check("q", fset, []*ast.File{consumerFile}, info); err != nil {
++		t.Fatal(err)
++	}
++	for _, name := range []string{"Result", "Ok", "Err", "Value", "Message"} {
++		found := false
++		ast.Inspect(consumerFile, func(n ast.Node) bool {
++			if id, ok := n.(*ast.Ident); ok && id.Name == name && info.Uses[id] != nil {
++				found = true
++			}
++			return true
++		})
++		if !found {
++			t.Errorf("consumer has no recorded use for %s", name)
++		}
++	}
++}
++
++func TestShallowGenericMethod(t *testing.T) {
++	const src = `package p
++
++type Box[T any] struct { Value T }
++
++func (box Box[T]) Map[U any](convert func(T) U) U {
++	return convert(box.Value)
++}
++`
++	fset := token.NewFileSet()
++	f, err := goparser.ParseFile(fset, "p.go", src, 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	pkg1, err := new(types.Config).Check("p", fset, []*ast.File{f}, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	data, err := gcimporter.IExportShallow(fset, pkg1, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	pkg2, err := gcimporter.IImportShallow(fset, gcimporter.GetPackagesFromMap(make(map[string]*types.Package)), data, "p", nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	box := pkg2.Scope().Lookup("Box").Type().(*types.Named)
++	method, _, _ := types.LookupFieldOrMethod(box, false, pkg2, "Map")
++	if method == nil {
++		t.Fatal("Map method missing after shallow round trip")
++	}
++	sig := method.Type().(*types.Signature)
++	if sig.RecvTypeParams().Len() != 1 || sig.TypeParams().Len() != 1 {
++		t.Fatalf("Map type parameters: receiver=%d method=%d, want 1 and 1", sig.RecvTypeParams().Len(), sig.TypeParams().Len())
++	}
++}
++
+ // This is a regression test for a failure to export a package
+ // containing type errors.
+ //
+diff --git a/internal/gcimporter/iexport.go b/internal/gcimporter/iexport.go
+index 4c9450f4ee..599c571dca 100644
+--- a/internal/gcimporter/iexport.go
++++ b/internal/gcimporter/iexport.go
+@@ -85,6 +85,7 @@
+ //             Pos       Pos
+ //             Name      stringOff
+ //             Recv      Param
++//             TypeParams []typeOff // iexportVersionMethods and later
+ //             Signature Signature
+ //         }
+ //     }
+@@ -824,16 +825,20 @@ func (p *iexporter) doDecl(obj types.Object) {
+ 			w.string(m.Name())
+ 			sig, _ := m.Type().(*types.Signature)
+ 
+-			// Receiver type parameters are type arguments of the receiver type, so
+-			// their name must be qualified before exporting recv.
++			// Receiver and method type parameters must be qualified before any
++			// reference to them is exported. Use distinct prefixes because their
++			// source names may shadow each other.
+ 			if rparams := sig.RecvTypeParams(); rparams.Len() > 0 {
+-				prefix := obj.Name() + "." + m.Name()
++				prefix := obj.Name() + "." + m.Name() + ".recv"
+ 				for rparam := range rparams.TypeParams() {
+ 					name := tparamExportName(prefix, rparam)
+ 					w.p.tparamNames[rparam.Obj()] = name
+ 				}
+ 			}
+ 			w.param(sig.Recv())
++			if w.p.version >= iexportVersionMethods {
++				w.tparamList(obj.Name()+"."+m.Name()+".type", sig.TypeParams(), obj.Pkg())
++			}
+ 			w.signature(sig)
+ 		}
+ 
+diff --git a/internal/gcimporter/iexport_common_test.go b/internal/gcimporter/iexport_common_test.go
+index 00dc2ffd5d..1bd8427ae4 100644
+--- a/internal/gcimporter/iexport_common_test.go
++++ b/internal/gcimporter/iexport_common_test.go
+@@ -9,4 +9,4 @@ package gcimporter
+ 
+ var IExportCommon = iexportCommon
+ 
+-const IExportVersion = iexportVersionGenerics
++const IExportVersion = iexportVersion
+diff --git a/internal/gcimporter/iimport.go b/internal/gcimporter/iimport.go
+index 1ee4e93549..0b73f6f49a 100644
+--- a/internal/gcimporter/iimport.go
++++ b/internal/gcimporter/iimport.go
+@@ -52,9 +52,10 @@ const (
+ 	iexportVersionPosCol   = 1
+ 	iexportVersionGo1_18   = 2
+ 	iexportVersionGenerics = 2
+-	iexportVersion         = iexportVersionGenerics
++	iexportVersionMethods  = 3
++	iexportVersion         = iexportVersionMethods
+ 
+-	iexportVersionCurrent = 2
++	iexportVersionCurrent = 3
+ )
+ 
+ type ident struct {
+@@ -179,7 +180,7 @@ func iimportCommon(fset *token.FileSet, getPackages GetPackagesFunc, data []byte
+ 
+ 	version = int64(r.uint64())
+ 	switch version {
+-	case iexportVersionGo1_18, iexportVersionPosCol, iexportVersionGo1_11:
++	case iexportVersionMethods, iexportVersionGo1_18, iexportVersionPosCol, iexportVersionGo1_11:
+ 	default:
+ 		if version > iexportVersionGo1_18 {
+ 			errorf("unstable iexport format version %d, just rebuild compiler and std library", version)
+@@ -628,7 +629,11 @@ func (r *importReader) obj(pkg *types.Package, name string) {
+ 						rparams[i] = types.Unalias(targs.At(i)).(*types.TypeParam)
+ 					}
+ 				}
+-				msig := r.signature(pkg, recv, rparams, nil)
++				var tparams []*types.TypeParam
++				if r.p.version >= iexportVersionMethods {
++					tparams = r.tparamList()
++				}
++				msig := r.signature(pkg, recv, rparams, tparams)
+ 
+ 				named.AddMethod(types.NewFunc(mpos, pkg, mname, msig))
+ 			}
+diff --git a/internal/refactor/inline/calleefx.go b/internal/refactor/inline/calleefx.go
+index 001bf61e93..631d5a3347 100644
+--- a/internal/refactor/inline/calleefx.go
++++ b/internal/refactor/inline/calleefx.go
+@@ -228,7 +228,10 @@ func calleefx(info *types.Info, body *ast.BlockStmt, paramInfos map[*types.Var]*
+ 	visitStmt = func(n ast.Stmt) bool {
+ 		switch n := n.(type) {
+ 		case *ast.DeclStmt:
+-			decl := n.Decl.(*ast.GenDecl)
++			decl, ok := n.Decl.(*ast.GenDecl)
++			if !ok {
++				return true // local enum declaration has no runtime effect
++			}
+ 			for _, spec := range decl.Specs {
+ 				switch spec := spec.(type) {
+ 				case *ast.ValueSpec:
+diff --git a/internal/refactor/inline/inline.go b/internal/refactor/inline/inline.go
+index cf4c587176..7b2a42d4df 100644
+--- a/internal/refactor/inline/inline.go
++++ b/internal/refactor/inline/inline.go
+@@ -3139,14 +3139,22 @@ func declares(stmts []ast.Stmt) map[string]bool {
+ 	for _, stmt := range stmts {
+ 		switch stmt := stmt.(type) {
+ 		case *ast.DeclStmt:
+-			for _, spec := range stmt.Decl.(*ast.GenDecl).Specs {
+-				switch spec := spec.(type) {
+-				case *ast.ValueSpec:
+-					for _, id := range spec.Names {
+-						names[id.Name] = true
++			switch decl := stmt.Decl.(type) {
++			case *ast.GenDecl:
++				for _, spec := range decl.Specs {
++					switch spec := spec.(type) {
++					case *ast.ValueSpec:
++						for _, id := range spec.Names {
++							names[id.Name] = true
++						}
++					case *ast.TypeSpec:
++						names[spec.Name.Name] = true
+ 					}
+-				case *ast.TypeSpec:
+-					names[spec.Name.Name] = true
++				}
++			case *ast.EnumDecl:
++				names[decl.Name.Name] = true
++				for _, variant := range decl.Variants {
++					names[variant.Name.Name] = true
+ 				}
+ 			}
+ 
+diff --git a/internal/typesinternal/element.go b/internal/typesinternal/element.go
+index 5fe4d8abcb..a5c26ad07d 100644
+--- a/internal/typesinternal/element.go
++++ b/internal/typesinternal/element.go
+@@ -37,6 +37,12 @@ func ForEachElement(rtypes *typeutil.Map, msets *typeutil.MethodSetCache, T type
+ 		tmset := msets.MethodSet(T)
+ 		for method := range tmset.Methods() {
+ 			sig := method.Type().(*types.Signature)
++			// An uninstantiated generic method has no concrete runtime method
++			// signature. Its instantiated uses are discovered separately, so do
++			// not traverse method type parameters as runtime types.
++			if sig.TypeParams().Len() != 0 {
++				continue
++			}
+ 			// It is tempting to call visit(sig, false)
+ 			// but, as noted in golang.org/cl/65450043,
+ 			// the Signature.Recv field is ignored by
+diff --git a/internal/typesinternal/element_test.go b/internal/typesinternal/element_test.go
+index 7d360db3d0..962d1ac55b 100644
+--- a/internal/typesinternal/element_test.go
++++ b/internal/typesinternal/element_test.go
+@@ -30,6 +30,7 @@ type C = T
+ type T struct{ x int }
+ func (T) method() uint
+ func (*T) ptrmethod() complex128
++func (T) generic[X any](X) X { var zero X; return zero }
+ 
+ type D = A
+ 
+@@ -80,7 +81,7 @@ func TestForEachElement(t *testing.T) {
+ 		// the result does not include the struct type itself.
+ 		// (This follows the Go toolchain behavior, and finesses the need
+ 		// to create wrapper methods for that struct type.)
+-		{"C", []string{"T", "*T", "int", "uint", "complex128", "!struct{x int}"}},
++		{"C", []string{"T", "*T", "int", "uint", "complex128", "!X", "!struct{x int}"}},
+ 
+ 		// alias type
+ 		{"D", []string{"int"}},
+diff --git a/refactor/satisfy/find.go b/refactor/satisfy/find.go
+index 3d21ce6d26..e76aebef8f 100644
+--- a/refactor/satisfy/find.go
++++ b/refactor/satisfy/find.go
+@@ -508,7 +508,10 @@ func (f *Finder) stmt(s ast.Stmt) {
+ 		// no-op
+ 
+ 	case *ast.DeclStmt:
+-		d := s.Decl.(*ast.GenDecl)
++		d, ok := s.Decl.(*ast.GenDecl)
++		if !ok {
++			break // local enum declaration has no assignment constraints
++		}
+ 		if d.Tok == token.VAR { // ignore consts
+ 			for _, spec := range d.Specs {
+ 				f.valueSpec(spec.(*ast.ValueSpec))

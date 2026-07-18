@@ -9,6 +9,7 @@ package types
 
 import (
 	"go/token"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -127,6 +128,9 @@ type Named struct {
 	// accessed.
 	methods []*Func
 
+	// enumInfo refers to metadata shared by an enum and all of its variants.
+	enumInfo *enumInfo
+
 	// loader may be provided to lazily load type parameters, underlying type, methods, and delayed functions
 	loader func(*Named) ([]*TypeParam, Type, []*Func, []func())
 }
@@ -138,6 +142,11 @@ type instance struct {
 	targs           *TypeList // type arguments
 	expandedMethods int       // number of expanded methods; expandedMethods <= len(orig.methods)
 	ctxt            *Context  // local Context; set to nil after full expansion
+}
+
+type enumInfo struct {
+	parent   *Named
+	variants []*Named
 }
 
 // stateMask represents each state in the lifecycle of a named type.
@@ -413,6 +422,113 @@ func (t *Named) TypeArgs() *TypeList {
 // NumMethods returns the number of explicit methods defined for t.
 func (t *Named) NumMethods() int {
 	return len(t.Origin().unpack().methods)
+}
+
+// EnumType returns the enum type that t belongs to. It returns t itself when
+// t is an enum type, and nil when t is neither an enum nor an enum variant.
+func (t *Named) EnumType() *Named {
+	orig := t.Origin()
+	var parent *Named
+	if orig.enumInfo != nil {
+		parent = orig.enumInfo.parent
+	} else if orig.enumMarker() != "" {
+		parent = orig
+	} else if marker := orig.enumVariantMarker(); marker != "" && orig.obj.pkg != nil {
+		obj, _ := orig.obj.pkg.Scope().Lookup(marker[len(".enum."):]).(*TypeName)
+		if obj != nil {
+			parent, _ = Unalias(obj.Type()).(*Named)
+		}
+	}
+	if parent == nil {
+		return nil
+	}
+	return instantiateEnumNamed(parent, t.TypeArgs())
+}
+
+// EnumVariants returns the variants of enum type t in declaration order.
+// It returns nil when t is not an enum type.
+func (t *Named) EnumVariants() []*Named {
+	orig := t.Origin()
+	if orig.enumMarker() == "" {
+		return nil
+	}
+	var variants []*Named
+	if orig.enumInfo != nil && orig.enumInfo.parent == orig {
+		variants = orig.enumInfo.variants
+	}
+	if variants == nil && orig.obj.pkg != nil {
+		marker := ".enum." + orig.obj.name
+		for _, name := range orig.obj.pkg.Scope().Names() {
+			obj, _ := orig.obj.pkg.Scope().Lookup(name).(*TypeName)
+			if obj == nil {
+				continue
+			}
+			variant, _ := Unalias(obj.Type()).(*Named)
+			if variant == nil || variant.Origin() == orig {
+				continue
+			}
+			for i := range variant.Origin().NumMethods() {
+				method := variant.Origin().Method(i)
+				if method.name == marker && method.pkg == orig.obj.pkg {
+					variants = append(variants, variant.Origin())
+					break
+				}
+			}
+		}
+		slices.SortFunc(variants, func(a, b *Named) int {
+			if c := a.Obj().Pos().Cmp(b.Obj().Pos()); c != 0 {
+				return c
+			}
+			return strings.Compare(a.Obj().Name(), b.Obj().Name())
+		})
+	}
+	result := make([]*Named, len(variants))
+	for i, variant := range variants {
+		result[i] = instantiateEnumNamed(variant, t.TypeArgs())
+	}
+	return result
+}
+
+func (t *Named) enumVariantMarker() string {
+	orig := t.Origin()
+	for i := range orig.NumMethods() {
+		method := orig.Method(i)
+		if len(method.name) > len(".enum.") && method.name[:len(".enum.")] == ".enum." && method.pkg == orig.obj.pkg {
+			return method.name
+		}
+	}
+	return ""
+}
+
+func (t *Named) enumMarker() string {
+	orig := t.Origin()
+	iface, _ := orig.Underlying().(*Interface)
+	if iface == nil {
+		return ""
+	}
+	marker := ".enum." + orig.obj.name
+	for i := range iface.NumExplicitMethods() {
+		method := iface.ExplicitMethod(i)
+		if method.name == marker && method.pkg == orig.obj.pkg {
+			return marker
+		}
+	}
+	return ""
+}
+
+func instantiateEnumNamed(orig *Named, targs *TypeList) *Named {
+	if targs.Len() == 0 {
+		return orig
+	}
+	args := make([]Type, targs.Len())
+	for i := range args {
+		args[i] = targs.At(i)
+	}
+	typ, err := Instantiate(nil, orig, args, false)
+	if err != nil {
+		return orig
+	}
+	return typ.(*Named)
 }
 
 // Method returns the i'th method of named type t for 0 <= i < t.NumMethods().
