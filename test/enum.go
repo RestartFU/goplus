@@ -90,17 +90,6 @@ func main() {
 	if _, ok := pointer.(Result); ok {
 		panic("pointer to enum variant passed runtime assertion")
 	}
-	if reflect.TypeFor[*Result.Ok]().Implements(reflect.TypeFor[Result]()) {
-		panic("pointer to enum variant implements enum through reflection")
-	}
-	type Forged struct{ Result.Ok }
-	var forged any = Forged{}
-	if _, ok := forged.(Result); ok {
-		panic("embedded enum variant passed runtime assertion")
-	}
-	if reflect.TypeFor[Forged]().Implements(reflect.TypeFor[Result]()) {
-		panic("embedded enum variant implements enum through reflection")
-	}
 	if !reflect.TypeFor[Result]().Implements(reflect.TypeFor[Result]()) {
 		panic("enum does not implement itself through reflection")
 	}

@@ -67,7 +67,9 @@ y := Option.Some[string]{Value: "ok"}
 
 When an assignment or return context already supplies the enum type, the
 short constructor is inferred (`var x Result = Ok{}`); enum switch cases also
-use short names (`case Ok:`). Short variant names are not package-scope types.
+use short names (`case Ok:`). Variants are constructors only: `Result.Ok{}` is
+valid, but `Result.Ok` cannot be used as a field, parameter, alias, or other
+standalone type.
 
 They were verified with x/tools commit `635ae9663724` and gopls v0.22.0:
 

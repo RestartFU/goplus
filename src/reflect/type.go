@@ -1573,11 +1573,13 @@ func implements(T, V *abi.Type) bool {
 }
 
 func isEnumInterface(t *interfaceType) bool {
-	if len(t.Methods) != 1 {
-		return false
+	for i := range t.Methods {
+		name := t.nameOff(t.Methods[i].Name).Name()
+		if len(name) > len(".enum.") && name[:len(".enum.")] == ".enum." {
+			return true
+		}
 	}
-	name := t.nameOff(t.Methods[0].Name).Name()
-	return len(name) > len(".enum.") && name[:len(".enum.")] == ".enum."
+	return false
 }
 
 // specialChannelAssignability reports whether a value x of channel type V

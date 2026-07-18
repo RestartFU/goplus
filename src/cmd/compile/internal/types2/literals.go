@@ -137,7 +137,7 @@ func (check *Checker) compositeLit(U Type, x *operand, e *syntax.CompositeLit, h
 			base = typ
 			break
 		}
-		typ = check.typ(e.Type)
+		typ = check.enumLitType(e.Type)
 		base = typ
 
 	// The hint mechanism is kept around to avoid reporting a false "need Go 1.28" error

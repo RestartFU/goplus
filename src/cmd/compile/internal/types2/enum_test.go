@@ -95,14 +95,14 @@ func TestEnumVersion(t *testing.T) {
 	}
 }
 
-func TestEnumVariantReceiverRejected(t *testing.T) {
+func TestEnumVariantTypeRejected(t *testing.T) {
 	const src = `package p
 type Result enum { Ok { value int }; Err }
 func (o Result.Ok) Value() int { return o.value }
 `
 	_, err := typecheck(src, nil, nil)
-	if err == nil || !strings.Contains(err.Error(), "cannot define method on enum variant Ok; use enum type Result as receiver") {
-		t.Fatalf("variant receiver error = %v", err)
+	if err == nil || !strings.Contains(err.Error(), "is a constructor, not a type") {
+		t.Fatalf("variant type error = %v", err)
 	}
 }
 
@@ -192,29 +192,6 @@ func inspect(result Result) { switch result { case Ok:; case Ok:; case Err:; cas
 	}
 }
 
-func TestEnumRejectsRecursiveVariants(t *testing.T) {
-	const direct = `package p
-type E enum { V { next E.V } }
-`
-	if _, err := typecheck(direct, nil, nil); err == nil || !strings.Contains(err.Error(), "invalid recursive type") {
-		t.Fatalf("direct recursive variant error = %v", err)
-	}
-
-	const mutual = `package p
-type E enum { A { b E.B }; B { a E.A } }
-`
-	if _, err := typecheck(mutual, nil, nil); err == nil || !strings.Contains(err.Error(), "invalid recursive type") {
-		t.Fatalf("mutually recursive variant error = %v", err)
-	}
-
-	const indirect = `package p
-type E enum { V { parent E; next *E.V } }
-`
-	if _, err := typecheck(indirect, nil, nil); err != nil {
-		t.Fatalf("indirect recursive variant: %v", err)
-	}
-}
-
 func TestEnumRejectsPointerVariant(t *testing.T) {
 	const src = `package p
 type Result enum { Ok }
@@ -230,9 +207,6 @@ var _ R = &Result.Ok{}
 func TestEnumRejectsPromotedMarker(t *testing.T) {
 	tests := []string{`package p
 type Inner enum { Public }
-type Outer enum { Wrap { Inner.Public } }
-		`, `package p
-type Inner enum { Public }
 type Outer enum { Wrap { Inner } }
 		`, `package p
 type Inner enum { Public }
@@ -243,6 +217,35 @@ type Outer enum { Wrap { Carrier } }
 		_, err := typecheck(src, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "promotes an enum marker") {
 			t.Fatalf("promoted enum marker error = %v", err)
+		}
+	}
+}
+
+func TestEnumVariantOnlyAllowedAsConstructor(t *testing.T) {
+	valid := `package p
+type Result enum { Ok { Value int } }
+var _ = Result.Ok{Value: 1}
+var _ any = &Result.Ok{Value: 2}
+type Option[T any] enum { Some { Value T } }
+var _ = Option.Some[int]{Value: 3}
+`
+	if _, err := typecheck(valid, nil, nil); err != nil {
+		t.Fatalf("variant constructors: %v", err)
+	}
+	for _, use := range []string{
+		"type Alias = Result.Ok",
+		"var _ Result.Ok",
+		"type Embedded struct { Result.Ok }",
+		"type Outer enum { Wrap { Result.Ok } }",
+		"func f(Result.Ok) {}",
+		"var _ = new(Result.Ok)",
+		"var _ = Result.Ok(0)",
+		"func f(x Result) { switch x.(type) { case Result.Ok: } }",
+	} {
+		src := "package p\ntype Result enum { Ok }\n" + use
+		_, err := typecheck(src, nil, nil)
+		if err == nil || !strings.Contains(err.Error(), "is a constructor, not a type") {
+			t.Fatalf("%s: variant type error = %v", use, err)
 		}
 	}
 }

@@ -537,6 +537,16 @@ func enumVariantName(variant *Named) string {
 	return name
 }
 
+func isEnumVariantNamed(named *Named) bool {
+	orig := named.Origin()
+	if orig.enumInfo != nil {
+		return orig.enumInfo.parent != orig
+	}
+	// Imported variants are reconstructed from their qualified object name.
+	// A source-level Go type name cannot itself contain a dot.
+	return strings.Contains(orig.obj.name, ".")
+}
+
 func (t *Named) enumVariantMarker() string {
 	orig := t.Origin()
 	for i := range orig.NumMethods() {

@@ -193,6 +193,10 @@ func (check *Checker) callExpr(x *operand, call *syntax.CallExpr) exprKind {
 
 	case typexpr:
 		// conversion
+		if check.rejectEnumVariantType(call.Fun, x.typ()) {
+			x.invalidate()
+			return conversion
+		}
 		check.nonGeneric(nil, x)
 		if !x.isValid() {
 			return conversion

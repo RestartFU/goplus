@@ -501,11 +501,13 @@ func implements(T, V *abi.Type) bool {
 }
 
 func isEnumInterface(t *interfaceType, rt rtype) bool {
-	if len(t.Methods) != 1 {
-		return false
+	for i := range t.Methods {
+		name := rt.nameOff(t.Methods[i].Name).Name()
+		if len(name) > len(".enum.") && name[:len(".enum.")] == ".enum." {
+			return true
+		}
 	}
-	name := rt.nameOff(t.Methods[0].Name).Name()
-	return len(name) > len(".enum.") && name[:len(".enum.")] == ".enum."
+	return false
 }
 
 // directlyAssignable reports whether a value x of type V can be directly

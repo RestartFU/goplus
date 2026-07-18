@@ -109,15 +109,17 @@ finish:
 	panic(&TypeAssertionError{concrete: typ, asserted: &inter.Type, missingMethod: itabInit(m, false)})
 }
 
-// isEnumInterface reports whether inter is the sealed runtime interface used
-// to represent an enum. Only concrete types carrying TFlagEnumVariant may
-// satisfy this otherwise-unspellable marker interface.
+// isEnumInterface reports whether inter contains the sealed runtime marker
+// used to represent an enum. Only concrete types carrying TFlagEnumVariant may
+// satisfy an interface containing this otherwise-unspellable marker.
 func isEnumInterface(inter *interfacetype) bool {
-	if len(inter.Methods) != 1 {
-		return false
+	for i := range inter.Methods {
+		name := toRType(&inter.Type).nameOff(inter.Methods[i].Name).Name()
+		if len(name) > len(".enum.") && name[:len(".enum.")] == ".enum." {
+			return true
+		}
 	}
-	name := toRType(&inter.Type).nameOff(inter.Methods[0].Name).Name()
-	return len(name) > len(".enum.") && name[:len(".enum.")] == ".enum."
+	return false
 }
 
 // find finds the given interface/type pair in t.

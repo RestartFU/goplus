@@ -405,12 +405,11 @@ func (check *Checker) implements(V, T Type, constraint bool, cause *string) bool
 }
 
 func enumInterfaceMarker(iface *Interface) string {
-	if iface.NumMethods() != 1 {
-		return ""
-	}
-	name := iface.Method(0).name
-	if len(name) > len(".enum.") && name[:len(".enum.")] == ".enum." {
-		return name
+	for i := 0; i < iface.NumMethods(); i++ {
+		name := iface.Method(i).name
+		if len(name) > len(".enum.") && name[:len(".enum.")] == ".enum." {
+			return name
+		}
 	}
 	return ""
 }
