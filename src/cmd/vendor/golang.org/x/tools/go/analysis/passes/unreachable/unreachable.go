@@ -80,6 +80,7 @@ func (d *deadState) findLabels(stmt ast.Stmt) {
 		log.Fatalf("%s: internal error in findLabels: unexpected statement %T", d.pass.Fset.Position(x.Pos()), x)
 
 	case *ast.AssignStmt,
+		*ast.TryStmt,
 		*ast.BadStmt,
 		*ast.DeclStmt,
 		*ast.DeferStmt,
@@ -215,6 +216,7 @@ func (d *deadState) findDead(stmt ast.Stmt) {
 		log.Fatalf("%s: internal error in findDead: unexpected statement %T", d.pass.Fset.Position(x.Pos()), x)
 
 	case *ast.AssignStmt,
+		*ast.TryStmt,
 		*ast.BadStmt,
 		*ast.DeclStmt,
 		*ast.DeferStmt,

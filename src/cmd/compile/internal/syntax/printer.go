@@ -550,6 +550,14 @@ func (p *printer) printRawNode(n Node) {
 			p.print(n.Rhs)
 		}
 
+	case *TryStmt:
+		p.print(_Name, "try")
+		if n.Lhs == nil {
+			p.print(blank, n.Rhs)
+		} else {
+			p.print(blank, n.Lhs, blank, _Define, blank, n.Rhs)
+		}
+
 	case *CallStmt:
 		p.print(n.Tok, blank, n.Call)
 

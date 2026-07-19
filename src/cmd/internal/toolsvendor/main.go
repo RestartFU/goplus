@@ -22,6 +22,84 @@ type edit struct {
 
 var edits = []edit{
 	{
+		"golang.org/x/tools/go/analysis/passes/unreachable/unreachable.go",
+		`\tcase *ast.AssignStmt,
+\t\t*ast.BadStmt,
+\t\t*ast.DeclStmt,
+\t\t*ast.DeferStmt,
+\t\t*ast.EmptyStmt,
+\t\t*ast.ExprStmt,`,
+		`\tcase *ast.AssignStmt,
+\t\t*ast.TryStmt,
+\t\t*ast.BadStmt,
+\t\t*ast.DeclStmt,
+\t\t*ast.DeferStmt,
+\t\t*ast.EmptyStmt,
+\t\t*ast.ExprStmt,`,
+	},
+	{
+		"golang.org/x/tools/go/analysis/passes/unreachable/unreachable.go",
+		`\tcase *ast.AssignStmt,
+\t\t*ast.BadStmt,
+\t\t*ast.DeclStmt,
+\t\t*ast.DeferStmt,
+\t\t*ast.EmptyStmt,
+\t\t*ast.GoStmt,`,
+		`\tcase *ast.AssignStmt,
+\t\t*ast.TryStmt,
+\t\t*ast.BadStmt,
+\t\t*ast.DeclStmt,
+\t\t*ast.DeferStmt,
+\t\t*ast.EmptyStmt,
+\t\t*ast.GoStmt,`,
+	},
+	{
+		"golang.org/x/tools/go/ast/astutil/enclosing.go",
+		`\tcase *ast.AssignStmt:
+\t\tchildren = append(children,
+\t\t\ttok(n.TokPos, len(n.Tok.String())))
+
+\tcase *ast.BasicLit:`,
+		`\tcase *ast.AssignStmt:
+\t\tchildren = append(children,
+\t\t\ttok(n.TokPos, len(n.Tok.String())))
+
+\tcase *ast.TryStmt:
+\t\tchildren = append(children,
+\t\t\ttok(n.Try, len("try")),
+\t\t\ttok(n.TokPos, len(":=")))
+
+\tcase *ast.BasicLit:`,
+	},
+	{
+		"golang.org/x/tools/go/ast/astutil/enclosing.go",
+		`\tcase *ast.AssignStmt:
+\t\treturn "assignment"
+\tcase *ast.BadDecl:`,
+		`\tcase *ast.AssignStmt:
+\t\treturn "assignment"
+\tcase *ast.TryStmt:
+\t\treturn "try statement"
+\tcase *ast.BadDecl:`,
+	},
+	{
+		"golang.org/x/tools/go/ast/astutil/rewrite.go",
+		`\tcase *ast.AssignStmt:
+\t\ta.applyList(n, "Lhs")
+\t\ta.applyList(n, "Rhs")
+
+\tcase *ast.GoStmt:`,
+		`\tcase *ast.AssignStmt:
+\t\ta.applyList(n, "Lhs")
+\t\ta.applyList(n, "Rhs")
+
+\tcase *ast.TryStmt:
+\t\ta.applyList(n, "Lhs")
+\t\ta.applyList(n, "Rhs")
+
+\tcase *ast.GoStmt:`,
+	},
+	{
 		"golang.org/x/tools/go/ast/edge/edge.go",
 		`\tValueSpec_Names
 \tValueSpec_Type
@@ -39,6 +117,8 @@ var edits = []edit{
 \tEnumVariant_Doc
 \tEnumVariant_Fields
 \tEnumVariant_Name
+\tTryStmt_Lhs
+\tTryStmt_Rhs
 
 \tmaxKind`,
 	},
@@ -59,6 +139,8 @@ var edits = []edit{
 \tEnumVariant_Doc:       info[*ast.EnumVariant]("Doc"),
 \tEnumVariant_Fields:    info[*ast.EnumVariant]("Fields"),
 \tEnumVariant_Name:      info[*ast.EnumVariant]("Name"),
+\tTryStmt_Lhs:           info[*ast.TryStmt]("Lhs"),
+\tTryStmt_Rhs:           info[*ast.TryStmt]("Rhs"),
 }`,
 	},
 	{
@@ -72,6 +154,7 @@ var edits = []edit{
 \tnValueSpec
 \tnEnumDecl
 \tnEnumVariant
+\tnTryStmt
 )`,
 	},
 	{
@@ -86,6 +169,8 @@ var edits = []edit{
 \t\treturn 1 << nEnumDecl
 \tcase *ast.EnumVariant:
 \t\treturn 1 << nEnumVariant
+\tcase *ast.TryStmt:
+\t\treturn 1 << nTryStmt
 \t}
 \treturn 0`,
 	},
@@ -190,6 +275,126 @@ var edits = []edit{
 \t\t\tbreak // local enum declaration has no assignment constraints
 \t\t}
 \t\tif d.Tok == token.VAR { // ignore consts`,
+	},
+	{
+		"golang.org/x/tools/go/ast/inspector/walk.go",
+		`\tcase *ast.AssignStmt:
+\t\twalkList(v, edge.AssignStmt_Lhs, n.Lhs)
+\t\twalkList(v, edge.AssignStmt_Rhs, n.Rhs)
+
+\tcase *ast.GoStmt:`,
+		`\tcase *ast.AssignStmt:
+\t\twalkList(v, edge.AssignStmt_Lhs, n.Lhs)
+\t\twalkList(v, edge.AssignStmt_Rhs, n.Rhs)
+
+\tcase *ast.TryStmt:
+\t\twalkList(v, edge.TryStmt_Lhs, n.Lhs)
+\t\twalkList(v, edge.TryStmt_Rhs, n.Rhs)
+
+\tcase *ast.GoStmt:`,
+	},
+	{
+		"golang.org/x/tools/go/cfg/builder.go",
+		`\t\t*ast.GoStmt,
+\t\t*ast.EmptyStmt,
+\t\t*ast.AssignStmt:`,
+		`\t\t*ast.GoStmt,
+\t\t*ast.EmptyStmt,
+\t\t*ast.AssignStmt,
+\t\t*ast.TryStmt:`,
+	},
+	{
+		"golang.org/x/tools/internal/astutil/free/free.go",
+		`\tcase *ast.AssignStmt:
+\t\twalkSlice(v, n.Rhs)
+\t\tif n.Tok == token.DEFINE {
+\t\t\tv.shortVarDecl(n.Lhs)
+\t\t} else {
+\t\t\twalkSlice(v, n.Lhs)
+\t\t}
+
+\tcase *ast.LabeledStmt:`,
+		`\tcase *ast.AssignStmt:
+\t\twalkSlice(v, n.Rhs)
+\t\tif n.Tok == token.DEFINE {
+\t\t\tv.shortVarDecl(n.Lhs)
+\t\t} else {
+\t\t\twalkSlice(v, n.Lhs)
+\t\t}
+
+\tcase *ast.TryStmt:
+\t\twalkSlice(v, n.Rhs)
+\t\tv.shortVarDecl(n.Lhs)
+
+\tcase *ast.LabeledStmt:`,
+	},
+	{
+		"golang.org/x/tools/refactor/satisfy/find.go",
+		`func (f *Finder) exprN(e ast.Expr) types.Type {
+\ttyp := f.info.Types[e].Type.(*types.Tuple)
+\tswitch e := e.(type) {`,
+		`func (f *Finder) exprN(e ast.Expr) types.Type {
+\ttyp := f.info.Types[e].Type
+\ttuple, _ := typ.(*types.Tuple)
+\tswitch e := e.(type) {`,
+	},
+	{
+		"golang.org/x/tools/refactor/satisfy/find.go",
+		`\tcase *ast.TypeAssertExpr:
+\t\t// y, ok := x.(T)
+\t\tf.typeAssert(f.expr(e.X), typ.At(0).Type())`,
+		`\tcase *ast.TypeAssertExpr:
+\t\t// y, ok := x.(T)
+\t\tif tuple != nil {
+\t\t\tf.typeAssert(f.expr(e.X), tuple.At(0).Type())
+\t\t} else {
+\t\t\tf.typeAssert(f.expr(e.X), typ)
+\t\t}`,
+	},
+	{
+		"golang.org/x/tools/refactor/satisfy/find.go",
+		`\t\tdefault:
+\t\t\t// y op= x
+\t\t\tf.expr(s.Lhs[0])
+\t\t\tf.expr(s.Rhs[0])
+\t\t}
+
+\tcase *ast.GoStmt:`,
+		`\t\tdefault:
+\t\t\t// y op= x
+\t\t\tf.expr(s.Lhs[0])
+\t\t\tf.expr(s.Rhs[0])
+\t\t}
+
+\tcase *ast.TryStmt:
+\t\tvar rhsTuple types.Type
+\t\tif len(s.Rhs) == 1 {
+\t\t\trhsTuple = f.exprN(s.Rhs[0])
+\t\t}
+\t\tfor i, expr := range s.Lhs {
+\t\t\tvar lhs, rhs types.Type
+\t\t\tif rhsTuple == nil {
+\t\t\t\trhs = f.expr(s.Rhs[i])
+\t\t\t} else if _, ok := rhsTuple.(*types.Tuple); ok {
+\t\t\t\trhs = f.extract(rhsTuple, i)
+\t\t\t} else {
+\t\t\t\trhs = rhsTuple
+\t\t\t}
+\t\t\tif id, ok := expr.(*ast.Ident); ok && id.Name != "_" {
+\t\t\t\tif obj, ok := f.info.Defs[id]; ok {
+\t\t\t\t\tlhs = obj.Type()
+\t\t\t\t}
+\t\t\t}
+\t\t\tif lhs == nil {
+\t\t\t\tlhs = f.expr(expr)
+\t\t\t}
+\t\t\tf.assign(lhs, rhs)
+\t\t}
+\t\tif rhsTuple == nil {
+\t\t\tf.expr(s.Rhs[len(s.Rhs)-1])
+\t\t}
+
+\tcase *ast.GoStmt:`,
 	},
 }
 

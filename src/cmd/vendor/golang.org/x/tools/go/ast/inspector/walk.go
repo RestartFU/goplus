@@ -183,6 +183,10 @@ func walk(v *visitor, ek edge.Kind, index int, node ast.Node) {
 		walkList(v, edge.AssignStmt_Lhs, n.Lhs)
 		walkList(v, edge.AssignStmt_Rhs, n.Rhs)
 
+	case *ast.TryStmt:
+		walkList(v, edge.TryStmt_Lhs, n.Lhs)
+		walkList(v, edge.TryStmt_Rhs, n.Rhs)
+
 	case *ast.GoStmt:
 		walk(v, edge.GoStmt_Call, -1, n.Call)
 

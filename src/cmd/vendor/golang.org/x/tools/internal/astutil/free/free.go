@@ -148,6 +148,10 @@ func (v *freeVisitor) Visit(n ast.Node) ast.Visitor {
 			walkSlice(v, n.Lhs)
 		}
 
+	case *ast.TryStmt:
+		walkSlice(v, n.Rhs)
+		v.shortVarDecl(n.Lhs)
+
 	case *ast.LabeledStmt:
 		// Ignore labels.
 		v.walk(n.Stmt)

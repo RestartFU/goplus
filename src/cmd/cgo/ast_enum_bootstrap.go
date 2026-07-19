@@ -6,6 +6,6 @@
 
 package main
 
-// walkEnum is empty while cmd/cgo is built against bootstrap go/ast, which
-// predates enum nodes. Bootstrap inputs cannot contain enum syntax.
-func (*File) walkEnum(any, func(*File, any, astContext)) bool { return false }
+// walkExtensions is empty while cmd/cgo is built against bootstrap go/ast,
+// which predates Go+ AST nodes. Bootstrap inputs cannot contain Go+ syntax.
+func (*File) walkExtensions(any, func(*File, any, astContext)) bool { return false }

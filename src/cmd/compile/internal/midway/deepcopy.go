@@ -450,6 +450,31 @@ func (c *DeepCopier) CopyStmt(s syntax.Stmt) syntax.Stmt {
 		newS = &syntax.SendStmt{Chan: c.CopyExpr(s.Chan), Value: c.CopyExpr(s.Value)}
 	case *syntax.AssignStmt:
 		newS = &syntax.AssignStmt{Op: s.Op, Lhs: c.CopyExpr(s.Lhs), Rhs: c.CopyExpr(s.Rhs)}
+	case *syntax.TryStmt:
+		copyLHS := func(expr syntax.Expr) syntax.Expr {
+			if list, ok := expr.(*syntax.ListExpr); ok {
+				newList := &syntax.ListExpr{}
+				for _, elem := range list.ElemList {
+					if name, ok := elem.(*syntax.Name); ok {
+						newList.ElemList = append(newList.ElemList, c.CopyName(name, c.info.Defs[name] != nil))
+					} else {
+						newList.ElemList = append(newList.ElemList, c.CopyExpr(elem))
+					}
+				}
+				newList.SetPos(list.Pos())
+				return newList
+			}
+			if name, ok := expr.(*syntax.Name); ok {
+				return c.CopyName(name, c.info.Defs[name] != nil)
+			}
+			return c.CopyExpr(expr)
+		}
+		newS = &syntax.TryStmt{
+			Lhs:       copyLHS(s.Lhs),
+			Rhs:       c.CopyExpr(s.Rhs),
+			Result:    c.CopyName(s.Result, true),
+			ResultUse: c.CopyName(s.ResultUse, false),
+		}
 	case *syntax.ReturnStmt:
 		newS = &syntax.ReturnStmt{Results: c.CopyExpr(s.Results)}
 	case *syntax.BranchStmt:
