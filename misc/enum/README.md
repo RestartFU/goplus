@@ -88,9 +88,9 @@ The called expression's final result and the enclosing function's final result
 must both be `error` or both be `bool`. This makes comma-ok expressions concise:
 
 ```go
-func lookup(values map[string]User, name string) (User, bool) {
+func displayName(values map[string]User, name string) (string, bool) {
 	try user := values[name]
-	return user, true
+	return user.DisplayName(), true
 }
 ```
 

@@ -6,9 +6,9 @@
 
 package main
 
-func lookup(values map[string]int, key string) (int, bool) {
+func doubleLookup(values map[string]int, key string) (int, bool) {
 	try value := values[key]
-	return value, true
+	return value * 2, true
 }
 
 func load(value int, ok bool) (int, bool) {
@@ -36,11 +36,11 @@ func main() {
 		}
 	}
 
-	value, ok := lookup(map[string]int{"answer": 42}, "answer")
+	value, ok := doubleLookup(map[string]int{"answer": 21}, "answer")
 	if value != 42 || !ok {
 		panic("map success")
 	}
-	value, ok = lookup(map[string]int{"answer": 42}, "missing")
+	value, ok = doubleLookup(map[string]int{"answer": 21}, "missing")
 	if value != 0 || ok {
 		panic("map failure")
 	}
