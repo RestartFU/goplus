@@ -89,7 +89,20 @@ test -x "$repo_root/bin/gofmt"
 test -f "$repo_root/VERSION.cache"
 
 work=$(mktemp -d "$prefix_parent/.goplus-install.XXXXXX")
-trap 'rm -rf -- "$work"' EXIT
+backup=
+cleanup() {
+	local status=$?
+	trap - EXIT HUP INT TERM
+	if [[ -n $backup && ! -e $prefix && ! -L $prefix && ( -e $backup || -L $backup ) ]]; then
+		mv -- "$backup" "$prefix" || status=$?
+	fi
+	rm -rf -- "$work" || status=$?
+	exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 stage=$work/root
 mkdir -p "$stage/go" "$stage/bin" "$stage/libexec"
 printf '%s\n' 'Go+ managed installation' >"$stage/$marker"
@@ -145,7 +158,6 @@ write_launcher goimports+ libexec/goimports
 "$stage/bin/go+" version
 "$stage/bin/gopls+" version
 
-backup=
 if [[ -e $prefix ]]; then
 	backup=$prefix.backup.$$
 	test ! -e "$backup"

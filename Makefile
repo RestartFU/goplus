@@ -20,7 +20,19 @@ install: build
 	install -d "$$parent"; \
 	stage=$$(mktemp -d "$$parent/.go-install.XXXXXX"); \
 	backup=; \
-	trap 'test -z "$$stage" || rm -rf -- "$$stage"' EXIT HUP INT TERM; \
+	cleanup() { \
+		status=$$?; \
+		trap - EXIT HUP INT TERM; \
+		if test -n "$$backup" && test ! -e "$$target" && test ! -L "$$target"; then \
+			mv -- "$$backup" "$$target" || status=$$?; \
+		fi; \
+		test -z "$$stage" || rm -rf -- "$$stage" || status=$$?; \
+		exit "$$status"; \
+	}; \
+	trap cleanup EXIT; \
+	trap 'exit 129' HUP; \
+	trap 'exit 130' INT; \
+	trap 'exit 143' TERM; \
 	cp -R $(GOROOT_DIRS) "$$stage/"; \
 	install -d "$$stage/pkg"; \
 	cp -R pkg/include pkg/tool "$$stage/pkg/"; \
