@@ -53,7 +53,9 @@ methods are hidden from editor surfaces. The x/tools patch also teaches SSA,
 CFG, satisfy, and inline analysis about enum switches and local enum
 declarations, and supports shallow export of Go 1.28 generic methods.
 
-Methods belong to the enum type itself, never to an individual variant. A
+User-defined methods belong to the enum type itself, never to an individual
+variant. Every variant has a generated `Variant() string` method that returns
+its declared name, and the enum exposes that method through its interface. A
 method that needs variant fields switches on its enum receiver and uses the
 case-narrowed receiver inside each arm.
 
@@ -66,6 +68,17 @@ type Result[T any] enum {
 	Err { Err error }
 }
 ```
+
+The generated method reports an enum value's variant name without implying
+anything about how its payload should be formatted:
+
+```go
+var result Result[int] = Result.Ok[int]{Value: 1}
+fmt.Println(result.Variant()) // Ok
+```
+
+The zero value of an enum remains `nil`. Switches handle it explicitly with
+`case nil`; it is not converted into a payload variant with zeroed fields.
 
 Variants are namespaced by their enum when no target type is available:
 

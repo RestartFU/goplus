@@ -98,9 +98,12 @@ func main() {
 	if inspect(result) != 42 || inspectExpression() != 42 || result.Value() != 42 {
 		panic("non-generic enum")
 	}
+	if got := result.Variant(); got != "Ok" || (Result.Err{err: "no"}).Variant() != "Err" {
+		panic("enum variant")
+	}
 
 	var option Option[string] = Some{value: "ok"}
-	if unwrap(option, "bad") != "ok" || option.Or("bad") != "ok" {
+	if unwrap(option, "bad") != "ok" || option.Or("bad") != "ok" || option.Variant() != "Some" {
 		panic("generic enum")
 	}
 

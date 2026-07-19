@@ -501,8 +501,10 @@ func enumVariant(typ Type, name string) *Named {
 		return nil
 	}
 	orig := named.Origin().unpack()
-	if orig.enumInfo == nil && orig.fromRHS == nil {
-		return nil
+	if orig.enumInfo == nil {
+		if !orig.stateHas(hasUnder) || orig.enumMarker() == "" {
+			return nil
+		}
 	}
 	parent := named.EnumType()
 	if parent == nil || parent.Origin() != named.Origin() {
@@ -527,6 +529,11 @@ func enumHasVariantName(named *Named, name string) bool {
 		}
 	}
 	return false
+}
+
+func isEnumType(named *Named) bool {
+	orig := named.Origin()
+	return orig.enumInfo != nil && orig.enumInfo.parent == orig
 }
 
 func enumVariantName(variant *Named) string {

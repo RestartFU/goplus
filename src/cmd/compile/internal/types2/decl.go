@@ -535,7 +535,10 @@ func (check *Checker) enumDecl(info *enumDeclInfo) {
 	}
 	markerSig := NewSignatureType(nil, nil, nil, enumMarkerParams(decl.Name.Pos(), check.pkg, named[0].TypeParams().list()), nil, false)
 	marker := NewFunc(decl.Name.Pos(), check.pkg, markerName, markerSig)
-	named[0].fromRHS = NewInterfaceType([]*Func{marker}, nil)
+	variantResult := NewTuple(newVar(ResultVar, decl.Name.Pos(), check.pkg, "", Typ[String]))
+	variantSig := NewSignatureType(nil, nil, nil, nil, variantResult, false)
+	variantMethod := NewFunc(decl.Name.Pos(), check.pkg, "Variant", variantSig)
+	named[0].fromRHS = NewInterfaceType([]*Func{marker, variantMethod}, nil)
 	einfo := &enumInfo{parent: named[0], variants: named[1:]}
 	for _, typ := range named {
 		typ.enumInfo = einfo
@@ -559,25 +562,33 @@ func (check *Checker) enumDecl(info *enumDeclInfo) {
 			named[i+1].fromRHS = check.subst(variant.Name.Pos(), styp, smap, nil, check.context())
 		}
 
-		recvType := Type(named[i+1])
-		baseTParams = variantTParams
-		rparams := make([]*TypeParam, len(baseTParams))
-		for i, baseTParam := range baseTParams {
-			obj := NewTypeName(variant.Name.Pos(), check.pkg, baseTParam.Obj().Name(), nil)
-			rparams[i] = check.newTypeParam(obj, nil)
-		}
-		if len(rparams) != 0 {
-			smap := makeRenameMap(baseTParams, rparams)
-			targs := make([]Type, len(rparams))
-			for i, tparam := range rparams {
-				tparam.bound = check.subst(variant.Name.Pos(), baseTParams[i].bound, smap, nil, check.context())
-				targs[i] = tparam
+		newReceiver := func() (*Var, []*TypeParam) {
+			recvType := Type(named[i+1])
+			rparams := make([]*TypeParam, len(variantTParams))
+			for i, baseTParam := range variantTParams {
+				obj := NewTypeName(variant.Name.Pos(), check.pkg, baseTParam.Obj().Name(), nil)
+				rparams[i] = check.newTypeParam(obj, nil)
 			}
-			recvType = check.instance(variant.Name.Pos(), named[i+1], targs, nil, check.context())
+			if len(rparams) != 0 {
+				smap := makeRenameMap(variantTParams, rparams)
+				targs := make([]Type, len(rparams))
+				for i, tparam := range rparams {
+					tparam.bound = check.subst(variant.Name.Pos(), variantTParams[i].bound, smap, nil, check.context())
+					targs[i] = tparam
+				}
+				recvType = check.instance(variant.Name.Pos(), named[i+1], targs, nil, check.context())
+			}
+			return newVar(RecvVar, variant.Name.Pos(), check.pkg, "", recvType), rparams
 		}
-		recv := newVar(RecvVar, variant.Name.Pos(), check.pkg, "", recvType)
-		sig := NewSignatureType(recv, rparams, nil, enumMarkerParams(variant.Name.Pos(), check.pkg, rparams), nil, false)
-		named[i+1].methods = []*Func{NewFunc(variant.Name.Pos(), check.pkg, markerName, sig)}
+		markerRecv, markerRParams := newReceiver()
+		sig := NewSignatureType(markerRecv, markerRParams, nil, enumMarkerParams(variant.Name.Pos(), check.pkg, markerRParams), nil, false)
+		variantRecv, variantRParams := newReceiver()
+		variantResult := NewTuple(newVar(ResultVar, variant.Name.Pos(), check.pkg, "", Typ[String]))
+		variantSig := NewSignatureType(variantRecv, variantRParams, nil, nil, variantResult, false)
+		named[i+1].methods = []*Func{
+			NewFunc(variant.Name.Pos(), check.pkg, markerName, sig),
+			NewFunc(variant.Name.Pos(), check.pkg, "Variant", variantSig),
+		}
 	}
 	for _, variant := range named[1:] {
 		variant := variant
@@ -812,6 +823,10 @@ func (check *Checker) collectMethods(obj *TypeName) {
 		assert(m.name != "_")
 		if base != nil && enumHasVariantName(base, m.name) {
 			check.errorf(m.pos, DuplicateMethod, "method %s.%s conflicts with enum variant %s", obj.Name(), m.name, m.name)
+			continue
+		}
+		if base != nil && m.name == "Variant" && isEnumType(base) {
+			check.errorf(m.pos, DuplicateMethod, "method %s.Variant conflicts with generated enum method Variant", obj.Name())
 			continue
 		}
 		if alt := mset.insert(m); alt != nil {

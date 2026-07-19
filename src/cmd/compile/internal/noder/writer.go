@@ -13,6 +13,7 @@ import (
 	"internal/pkgbits"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"cmd/compile/internal/base"
@@ -2925,12 +2926,25 @@ func (c *declCollector) Visit(n syntax.Node) syntax.Visitor {
 			named := obj.Type().(*types2.Named)
 			for i := range named.NumMethods() {
 				method := named.Method(i)
-				if method.Name() != markerName && !strings.HasPrefix(method.Name(), markerName+".") {
+				isMarker := method.Name() == markerName || strings.HasPrefix(method.Name(), markerName+".")
+				if !isMarker && method.Name() != "Variant" {
 					continue
 				}
 				body := new(syntax.BlockStmt)
 				body.SetPos(variant.Pos())
 				body.Rbrace = variant.Pos()
+				if method.Name() == "Variant" {
+					literal := new(syntax.BasicLit)
+					literal.SetPos(variant.Pos())
+					literal.Value = strconv.Quote(variant.Name.Value)
+					literal.Kind = syntax.StringLit
+					tv := syntax.TypeAndValue{Type: types2.Typ[types2.String], Value: constant.MakeString(variant.Name.Value)}
+					tv.SetIsValue()
+					literal.SetTypeInfo(tv)
+					ret := &syntax.ReturnStmt{Results: literal}
+					ret.SetPos(variant.Pos())
+					body.List = []syntax.Stmt{ret}
+				}
 				decl := &syntax.FuncDecl{
 					Name: syntax.NewName(variant.Pos(), method.Name()),
 					Body: body,
@@ -2938,7 +2952,6 @@ func (c *declCollector) Visit(n syntax.Node) syntax.Visitor {
 				decl.SetPos(variant.Pos())
 				pw.funDecls[method] = decl
 				pw.enumMethods = append(pw.enumMethods, enumMethod{named, method})
-				break
 			}
 		}
 

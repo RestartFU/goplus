@@ -100,6 +100,50 @@ func makeResult() Result { return Result.Ok{value: 42} }
 	}
 }
 
+func TestEnumVariantMethods(t *testing.T) {
+	pkg, err := checkEnumPackage(t, `package p
+type Decision enum { Allow; Deny { Reason string } }
+var _ string = Decision.Allow{}.Variant()
+func decisionVariant(decision Decision) string { return decision.Variant() }
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision := pkg.Scope().Lookup("Decision").Type().(*types.Named)
+	for _, typ := range append([]*types.Named{decision}, decision.EnumVariants()...) {
+		method, _, _ := types.LookupFieldOrMethod(typ, true, pkg, "Variant")
+		fn, ok := method.(*types.Func)
+		if !ok {
+			t.Fatalf("%s Variant method = %T, want *types.Func", typ, method)
+		}
+		sig := fn.Type().(*types.Signature)
+		if sig.Params().Len() != 0 || sig.Results().Len() != 1 || sig.Results().At(0).Type() != types.Typ[types.String] {
+			t.Fatalf("%s Variant signature = %s, want func() string", typ, sig)
+		}
+	}
+}
+
+func TestEnumVariantMethodCannotBeOverridden(t *testing.T) {
+	_, err := checkEnumPackage(t, `package p
+type Decision enum { Allow }
+func (Decision) Variant() string { return "custom" }
+`)
+	if err == nil || !strings.Contains(err.Error(), "conflicts with generated enum method Variant") {
+		t.Fatalf("Variant override error = %v", err)
+	}
+}
+
+func TestVariantMethodOnRecursiveNonEnum(t *testing.T) {
+	_, err := checkEnumPackage(t, `package p
+type A struct { B *B }
+type B A
+func (B) Variant() string { return "B" }
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestEnumVersion(t *testing.T) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "enum.go", "package p; type E enum { A }", parser.SkipObjectResolution)

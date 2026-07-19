@@ -1,5 +1,5 @@
 diff --git a/go/analysis/passes/unreachable/unreachable.go b/go/analysis/passes/unreachable/unreachable.go
-index 532f38fe9..d623be506 100644
+index 532f38fe910689ad287d4922e3ace6ddbf6514f0..d623be50688d00ea99da26aca763e48f67e14e2f 100644
 --- a/go/analysis/passes/unreachable/unreachable.go
 +++ b/go/analysis/passes/unreachable/unreachable.go
 @@ -80,6 +80,7 @@ func (d *deadState) findLabels(stmt ast.Stmt) {
@@ -19,7 +19,7 @@ index 532f38fe9..d623be506 100644
  		*ast.DeclStmt,
  		*ast.DeferStmt,
 diff --git a/go/ast/astutil/enclosing.go b/go/ast/astutil/enclosing.go
-index 0fb4e7eea..092c654f7 100644
+index 0fb4e7eea81af70b1b65865c5fbe178eb4fb1a8c..092c654f71c37bc715ad1232b10f006a7df674a2 100644
 --- a/go/ast/astutil/enclosing.go
 +++ b/go/ast/astutil/enclosing.go
 @@ -221,6 +221,11 @@ func childrenOf(n ast.Node) []ast.Node {
@@ -44,7 +44,7 @@ index 0fb4e7eea..092c654f7 100644
  		return "bad declaration"
  	case *ast.BadExpr:
 diff --git a/go/ast/astutil/rewrite.go b/go/ast/astutil/rewrite.go
-index 4ad054930..45a2d28a7 100644
+index 4ad0549304ca21d807c6fb067c56b0e890dcaa59..45a2d28a7b063ae64dd8dc85e0c7a3bd1d32b5fa 100644
 --- a/go/ast/astutil/rewrite.go
 +++ b/go/ast/astutil/rewrite.go
 @@ -339,6 +339,10 @@ func (a *application) apply(parent ast.Node, name string, iter *iterator, n ast.
@@ -59,7 +59,7 @@ index 4ad054930..45a2d28a7 100644
  		a.apply(n, "Call", nil, n.Call)
  
 diff --git a/go/ast/edge/edge.go b/go/ast/edge/edge.go
-index 8dc4dd150..67253c9a0 100644
+index 8dc4dd1502baa3743786d44a922f04433eb1206a..67253c9a00d2b4693d374b339f1b97dc70246c1a 100644
 --- a/go/ast/edge/edge.go
 +++ b/go/ast/edge/edge.go
 @@ -165,6 +165,16 @@ const (
@@ -95,7 +95,7 @@ index 8dc4dd150..67253c9a0 100644
 +	TryStmt_Rhs:           info[*ast.TryStmt]("Rhs"),
  }
 diff --git a/go/ast/inspector/inspector_test.go b/go/ast/inspector/inspector_test.go
-index 316e7c2ed..e9a1504f3 100644
+index 316e7c2ed5740704fdc9c1909b64ce7014fa0a5e..e9a1504f3aa0e3e49a5b0b29e20bf6a56ab20a28 100644
 --- a/go/ast/inspector/inspector_test.go
 +++ b/go/ast/inspector/inspector_test.go
 @@ -75,6 +75,26 @@ func TestInspectAllNodes(t *testing.T) {
@@ -126,7 +126,7 @@ index 316e7c2ed..e9a1504f3 100644
  	// src is using the 16 identifiers i0, i1, ... i15 so
  	// we can easily verify that we've found all of them.
 diff --git a/go/ast/inspector/typeof.go b/go/ast/inspector/typeof.go
-index 9852331a3..9d342cf8b 100644
+index 9852331a3dbe3f2d81b0b88acec21ca0b493c50f..9d342cf8b4bc5d29d228007ac3cf166a81bb0de4 100644
 --- a/go/ast/inspector/typeof.go
 +++ b/go/ast/inspector/typeof.go
 @@ -71,6 +71,9 @@ const (
@@ -153,7 +153,7 @@ index 9852331a3..9d342cf8b 100644
  	return 0
  }
 diff --git a/go/ast/inspector/walk.go b/go/ast/inspector/walk.go
-index 5f1c93c8a..03e325d3a 100644
+index 5f1c93c8a73c4a55ca875e8b4d38703e4335b522..03e325d3ac5253d2d0986ae9f076fcc200682cfd 100644
 --- a/go/ast/inspector/walk.go
 +++ b/go/ast/inspector/walk.go
 @@ -183,6 +183,10 @@ func walk(v *visitor, ek edge.Kind, index int, node ast.Node) {
@@ -197,7 +197,7 @@ index 5f1c93c8a..03e325d3a 100644
  		if n.Doc != nil {
  			walk(v, edge.FuncDecl_Doc, -1, n.Doc)
 diff --git a/go/cfg/builder.go b/go/cfg/builder.go
-index f16cd4230..723cfc529 100644
+index f16cd4230924d09d83c385dc4890d19355e96ca0..723cfc529abdf0f564fe1dd88d16468423425a9b 100644
 --- a/go/cfg/builder.go
 +++ b/go/cfg/builder.go
 @@ -33,7 +33,8 @@ start:
@@ -223,7 +223,7 @@ index f16cd4230..723cfc529 100644
  			for _, spec := range d.Specs {
  				if spec, ok := spec.(*ast.ValueSpec); ok {
 diff --git a/go/ssa/builder.go b/go/ssa/builder.go
-index 242074925..98c9c6d74 100644
+index 242074925c636c97e016cb4f090a5a7ad51d9a7c..da3fa4a4e87d0c813bc0039e526a1b73dffcd871 100644
 --- a/go/ssa/builder.go
 +++ b/go/ssa/builder.go
 @@ -1432,6 +1432,13 @@ func (b *builder) compLit(fn *Function, addr Value, e *ast.CompositeLit, isZero
@@ -325,7 +325,7 @@ index 242074925..98c9c6d74 100644
  		// The "intrinsics" new/make/len/cap are forbidden here.
  		// panic is treated like an ordinary function call.
 diff --git a/go/ssa/builder_test.go b/go/ssa/builder_test.go
-index adb04cde7..384fe47f5 100644
+index adb04cde7f1a819bcc845c7ff6af71468636f2d9..384fe47f551fcad3e77348bb30261aa3b2a691dd 100644
 --- a/go/ssa/builder_test.go
 +++ b/go/ssa/builder_test.go
 @@ -34,6 +34,47 @@ import (
@@ -377,7 +377,7 @@ index adb04cde7..384fe47f5 100644
  // functions with no code for the external portions, but are otherwise ok.
  func TestBuildPackage(t *testing.T) {
 diff --git a/internal/astutil/free/free.go b/internal/astutil/free/free.go
-index 2c4d2c4e5..c74814b43 100644
+index 2c4d2c4e52f4b803560ff8c1f91dde6ac6598240..8aca32bcf95ec914ace2e3ce003affe8e7f1f872 100644
 --- a/internal/astutil/free/free.go
 +++ b/internal/astutil/free/free.go
 @@ -148,6 +148,10 @@ func (v *freeVisitor) Visit(n ast.Node) ast.Visitor {
@@ -392,10 +392,10 @@ index 2c4d2c4e5..c74814b43 100644
  		// Ignore labels.
  		v.walk(n.Stmt)
 diff --git a/internal/gcimporter/gcimporter_test.go b/internal/gcimporter/gcimporter_test.go
-index 0f08f477f..0c6ac0938 100644
+index 0f08f477fc33d240b77c157c9908f2e62f50f6b8..137f9a40fc2acf5a4cf36875e130e06e8396ecd1 100644
 --- a/internal/gcimporter/gcimporter_test.go
 +++ b/internal/gcimporter/gcimporter_test.go
-@@ -771,6 +771,135 @@ func TestIssue57015(t *testing.T) {
+@@ -771,6 +771,138 @@ func TestIssue57015(t *testing.T) {
  	compileAndImportPkg(t, "issue57015")
  }
  
@@ -438,6 +438,9 @@ index 0f08f477f..0c6ac0938 100644
 +		named := types.Unalias(obj.Type()).(*types.Named)
 +		if named.EnumType() == nil {
 +			t.Errorf("%s lost enum metadata; underlying=%s methods=%d", name, named.Underlying(), named.NumMethods())
++		}
++		if method, _, _ := types.LookupFieldOrMethod(named, false, pkg2, "Variant"); method == nil {
++			t.Errorf("%s lost generated Variant method", name)
 +		}
 +	}
 +	if variants := pkg2.Scope().Lookup("Result").Type().(*types.Named).EnumVariants(); len(variants) != 2 {
@@ -532,7 +535,7 @@ index 0f08f477f..0c6ac0938 100644
  // containing type errors.
  //
 diff --git a/internal/gcimporter/iexport.go b/internal/gcimporter/iexport.go
-index 4c9450f4e..e33653b2e 100644
+index 4c9450f4eedd9954f6263e3973f35fa5d5c9f160..e33653b2ef9e64a3432e951b0a2233064e47b9b1 100644
 --- a/internal/gcimporter/iexport.go
 +++ b/internal/gcimporter/iexport.go
 @@ -85,6 +85,7 @@
@@ -577,7 +580,7 @@ index 4c9450f4e..e33653b2e 100644
  		}
  
 diff --git a/internal/gcimporter/iexport_common_test.go b/internal/gcimporter/iexport_common_test.go
-index 00dc2ffd5..1bd8427ae 100644
+index 00dc2ffd5deee96c57600ce6ecc3b74bd7b930ec..1bd8427ae412c85bd3dc8983b21cd233e89fd991 100644
 --- a/internal/gcimporter/iexport_common_test.go
 +++ b/internal/gcimporter/iexport_common_test.go
 @@ -9,4 +9,4 @@ package gcimporter
@@ -587,7 +590,7 @@ index 00dc2ffd5..1bd8427ae 100644
 -const IExportVersion = iexportVersionGenerics
 +const IExportVersion = iexportVersion
 diff --git a/internal/gcimporter/iimport.go b/internal/gcimporter/iimport.go
-index 1ee4e9354..963c727b6 100644
+index 1ee4e9354917911ea66510b5f48faaa9a1b5d383..963c727b6654e85495877d35ba98badd926e6e85 100644
 --- a/internal/gcimporter/iimport.go
 +++ b/internal/gcimporter/iimport.go
 @@ -52,9 +52,10 @@ const (
@@ -635,7 +638,7 @@ index 1ee4e9354..963c727b6 100644
  				named.AddMethod(types.NewFunc(mpos, pkg, mname, msig))
  			}
 diff --git a/internal/refactor/inline/calleefx.go b/internal/refactor/inline/calleefx.go
-index 001bf61e9..631d5a334 100644
+index 001bf61e93e5e93e1f28d274aeead79874fd8df2..631d5a33478ec732e42cd14086dd5db9aeb0c9c0 100644
 --- a/internal/refactor/inline/calleefx.go
 +++ b/internal/refactor/inline/calleefx.go
 @@ -228,7 +228,10 @@ func calleefx(info *types.Info, body *ast.BlockStmt, paramInfos map[*types.Var]*
@@ -651,7 +654,7 @@ index 001bf61e9..631d5a334 100644
  				switch spec := spec.(type) {
  				case *ast.ValueSpec:
 diff --git a/internal/refactor/inline/inline.go b/internal/refactor/inline/inline.go
-index cf4c58717..7b2a42d4d 100644
+index cf4c587176e5cd6441badf57594468a6c27e4f89..7b2a42d4dfcf011d9da2bc1c94947abc4be229ba 100644
 --- a/internal/refactor/inline/inline.go
 +++ b/internal/refactor/inline/inline.go
 @@ -3139,14 +3139,22 @@ func declares(stmts []ast.Stmt) map[string]bool {
@@ -685,7 +688,7 @@ index cf4c58717..7b2a42d4d 100644
  			}
  
 diff --git a/internal/typesinternal/element.go b/internal/typesinternal/element.go
-index 5fe4d8abc..a5c26ad07 100644
+index 5fe4d8abcb5a7c3fcaa612d7fb0ab666d76af6c7..a5c26ad07ddda13b3d4074f935867762d0508b84 100644
 --- a/internal/typesinternal/element.go
 +++ b/internal/typesinternal/element.go
 @@ -37,6 +37,12 @@ func ForEachElement(rtypes *typeutil.Map, msets *typeutil.MethodSetCache, T type
@@ -702,7 +705,7 @@ index 5fe4d8abc..a5c26ad07 100644
  			// but, as noted in golang.org/cl/65450043,
  			// the Signature.Recv field is ignored by
 diff --git a/internal/typesinternal/element_test.go b/internal/typesinternal/element_test.go
-index 7d360db3d..962d1ac55 100644
+index 7d360db3d072c1f6da3ee2ad59b1109b2a941a4e..962d1ac55be2bc8b79e063d12494e4de2098d66f 100644
 --- a/internal/typesinternal/element_test.go
 +++ b/internal/typesinternal/element_test.go
 @@ -30,6 +30,7 @@ type C = T
@@ -723,10 +726,33 @@ index 7d360db3d..962d1ac55 100644
  		// alias type
  		{"D", []string{"int"}},
 diff --git a/refactor/satisfy/find.go b/refactor/satisfy/find.go
-index 3d21ce6d2..c8efaf5e4 100644
+index 3d21ce6d26e8122ce54df04cfd740ed9b36bd7f7..91b541ae58fe36610fb0139d135cc3ab98a0c8b8 100644
 --- a/refactor/satisfy/find.go
 +++ b/refactor/satisfy/find.go
-@@ -508,7 +508,10 @@ func (f *Finder) stmt(s ast.Stmt) {
+@@ -120,7 +120,8 @@ var (
+ 
+ // exprN visits an expression in a multi-value context.
+ func (f *Finder) exprN(e ast.Expr) types.Type {
+-	typ := f.info.Types[e].Type.(*types.Tuple)
++	typ := f.info.Types[e].Type
++	tuple, _ := typ.(*types.Tuple)
+ 	switch e := e.(type) {
+ 	case *ast.ParenExpr:
+ 		return f.exprN(e.X)
+@@ -137,7 +138,11 @@ func (f *Finder) exprN(e ast.Expr) types.Type {
+ 
+ 	case *ast.TypeAssertExpr:
+ 		// y, ok := x.(T)
+-		f.typeAssert(f.expr(e.X), typ.At(0).Type())
++		if tuple != nil {
++			f.typeAssert(f.expr(e.X), tuple.At(0).Type())
++		} else {
++			f.typeAssert(f.expr(e.X), typ)
++		}
+ 
+ 	case *ast.UnaryExpr: // must be receive <-
+ 		// y, ok := <-x
+@@ -508,7 +513,10 @@ func (f *Finder) stmt(s ast.Stmt) {
  		// no-op
  
  	case *ast.DeclStmt:
@@ -738,7 +764,7 @@ index 3d21ce6d2..c8efaf5e4 100644
  		if d.Tok == token.VAR { // ignore consts
  			for _, spec := range d.Specs {
  				f.valueSpec(spec.(*ast.ValueSpec))
-@@ -564,6 +567,32 @@ func (f *Finder) stmt(s ast.Stmt) {
+@@ -564,6 +572,32 @@ func (f *Finder) stmt(s ast.Stmt) {
  			f.expr(s.Rhs[0])
  		}
  
