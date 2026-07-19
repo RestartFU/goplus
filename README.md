@@ -20,6 +20,11 @@ For this fork's first-class enums, `try` propagation statements, and matching ed
 Go+ toolchain with `go+`, `gofmt+`, `gopls+`, and `goimports+`; see
 [`misc/enum/README.md`](misc/enum/README.md) for options.
 
+Windows prereleases also provide `goplus-installer-windows-amd64.exe` on the
+[GitHub releases page](https://github.com/RestartFU/goplus/releases). The
+installer requires Git and Go 1.24.6 or newer because it builds the tagged Go+
+toolchain and editor tools locally before installing them.
+
 #### Binary Distributions
 
 Official binary distributions are available at https://go.dev/dl/.

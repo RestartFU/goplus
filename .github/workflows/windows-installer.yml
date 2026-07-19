@@ -1,0 +1,57 @@
+name: Windows installer
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/windows-installer.yml"
+      - "install-goplus.ps1"
+      - "misc/enum/goplus-installer/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: v0.1.0-alpha.1
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 1.24.6
+          cache: false
+
+      - name: Test installer
+        working-directory: misc
+        run: go test ./enum/goplus-installer
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Push-Location misc
+          go build -trimpath -ldflags="-s -w -X main.releaseTag=$env:RELEASE_TAG" -o ..\dist\goplus-installer-windows-amd64.exe ./enum/goplus-installer
+          Pop-Location
+          $version = & .\dist\goplus-installer-windows-amd64.exe -version
+          if ($version -ne $env:RELEASE_TAG) {
+            throw "installer version is $version, want $env:RELEASE_TAG"
+          }
+
+      - name: Validate Windows installation
+        shell: pwsh
+        run: |
+          $prefix = Join-Path $env:RUNNER_TEMP "GoPlus"
+          .\install-goplus.ps1 -Prefix $prefix -NoPathUpdate
+          & (Join-Path $prefix "bin\go+.exe") version
+          & (Join-Path $prefix "bin\gopls+.exe") version
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: goplus-installer-windows-amd64
+          path: dist/goplus-installer-windows-amd64.exe
+          if-no-files-found: error
