@@ -559,7 +559,13 @@ func (p *printer) printRawNode(n Node) {
 		}
 
 	case *CallStmt:
-		p.print(n.Tok, blank, n.Call)
+		if n.DeferBlock {
+			call := n.Call.(*CallExpr)
+			lit := call.Fun.(*FuncLit)
+			p.print(n.Tok, blank, lit.Body)
+		} else {
+			p.print(n.Tok, blank, n.Call)
+		}
 
 	case *ReturnStmt:
 		p.print(_Return)

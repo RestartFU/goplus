@@ -2042,6 +2042,20 @@ func (p *parser) parseDeferStmt() ast.Stmt {
 	}
 
 	pos := p.expect(token.DEFER)
+	if p.tok == token.LBRACE {
+		p.exprLev++
+		body := p.parseBody()
+		p.exprLev--
+		call := &ast.CallExpr{
+			Fun: &ast.FuncLit{
+				Type: &ast.FuncType{Params: new(ast.FieldList)},
+				Body: body,
+			},
+			Rparen: body.Rbrace,
+		}
+		p.expectSemi()
+		return &ast.DeferStmt{Defer: pos, Call: call}
+	}
 	call := p.parseCallExpr("defer")
 	p.expectSemi()
 	if call == nil {

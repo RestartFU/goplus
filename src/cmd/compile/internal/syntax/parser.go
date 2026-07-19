@@ -1045,6 +1045,20 @@ func (p *parser) callStmt() *CallStmt {
 	s.pos = p.pos()
 	s.Tok = p.tok // _Defer or _Go
 	p.next()
+	if s.Tok == _Defer && p.tok == _Lbrace {
+		typ := new(FuncType)
+		typ.pos = s.pos
+		lit := new(FuncLit)
+		lit.pos = s.pos
+		lit.Type = typ
+		lit.Body = p.funcBody()
+		call := new(CallExpr)
+		call.pos = lit.Body.Rbrace
+		call.Fun = lit
+		s.Call = call
+		s.DeferBlock = true
+		return s
+	}
 
 	x := p.pexpr(nil, p.tok == _Lparen) // keep_parens so we can report error below
 	if t := Unparen(x); t != x {

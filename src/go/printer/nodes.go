@@ -1425,7 +1425,11 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 
 	case *ast.DeferStmt:
 		p.print(token.DEFER, blank)
-		p.expr(s.Call)
+		if body, ok := deferBlock(s.Call); ok {
+			p.stmt(body, nextIsRBrace)
+		} else {
+			p.expr(s.Call)
+		}
 
 	case *ast.ReturnStmt:
 		p.print(token.RETURN)
@@ -1556,6 +1560,17 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 	default:
 		panic("unreachable")
 	}
+}
+
+func deferBlock(call *ast.CallExpr) (*ast.BlockStmt, bool) {
+	lit, ok := call.Fun.(*ast.FuncLit)
+	if !ok || call.Lparen.IsValid() || len(call.Args) != 0 || call.Ellipsis.IsValid() {
+		return nil, false
+	}
+	if lit.Type == nil || lit.Type.Params == nil || len(lit.Type.Params.List) != 0 || lit.Type.Results != nil || lit.Body == nil || call.Rparen != lit.Body.Rbrace {
+		return nil, false
+	}
+	return lit.Body, true
 }
 
 // ----------------------------------------------------------------------------
