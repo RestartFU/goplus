@@ -470,10 +470,10 @@ func (c *DeepCopier) CopyStmt(s syntax.Stmt) syntax.Stmt {
 			return c.CopyExpr(expr)
 		}
 		newS = &syntax.TryStmt{
-			Lhs:      copyLHS(s.Lhs),
-			Rhs:      c.CopyExpr(s.Rhs),
-			Error:    c.CopyName(s.Error, true),
-			ErrorUse: c.CopyName(s.ErrorUse, false),
+			Lhs:       copyLHS(s.Lhs),
+			Rhs:       c.CopyExpr(s.Rhs),
+			Result:    c.CopyName(s.Result, true),
+			ResultUse: c.CopyName(s.ResultUse, false),
 		}
 	case *syntax.ReturnStmt:
 		newS = &syntax.ReturnStmt{Results: c.CopyExpr(s.Results)}

@@ -545,22 +545,31 @@ func (check *Checker) stmt(ctxt stmtContext, s syntax.Stmt) {
 			check.softErrorf(s, NoNewVar, "no new variables on left side of :=")
 		}
 
-		lhs := append(userLhs, s.Error)
+		lhs := append(userLhs, s.Result)
 		check.shortVarDecl(s.Pos(), lhs, syntax.UnpackListExpr(s.Rhs))
 
-		errObj, _ := check.lookup(s.Error.Value).(*Var)
-		if errObj != nil {
-			check.usedVars[errObj] = true
-			check.recordUse(s.ErrorUse, errObj)
-			errorType := Universe.Lookup("error").Type()
-			if errObj.typ != nil && !Identical(errObj.typ, errorType) {
-				check.errorf(s.Rhs, IncompatibleAssign, "final try result must have type error, have %s", errObj.typ)
+		propagatesBool := false
+		resultObj, _ := check.lookup(s.Result.Value).(*Var)
+		if resultObj != nil {
+			check.usedVars[resultObj] = true
+			check.recordUse(s.ResultUse, resultObj)
+			if resultObj.typ != nil {
+				switch {
+				case Identical(resultObj.typ, universeError):
+				case Identical(resultObj.typ, universeBool):
+					propagatesBool = true
+				default:
+					check.errorf(s.Rhs, IncompatibleAssign, "final try result must have type error or bool, have %s", resultObj.typ)
+				}
 			}
 		}
 
 		results := check.sig.results
-		errorType := Universe.Lookup("error").Type()
-		if results.Len() == 0 || !Identical(results.At(results.Len()-1).Type(), errorType) {
+		if propagatesBool {
+			if results.Len() == 0 || !Identical(results.At(results.Len()-1).Type(), universeBool) {
+				check.error(s, WrongResultCount, "try requires the enclosing function to return bool as its final result")
+			}
+		} else if results.Len() == 0 || !Identical(results.At(results.Len()-1).Type(), universeError) {
 			check.error(s, WrongResultCount, "try requires the enclosing function to return error as its final result")
 		}
 

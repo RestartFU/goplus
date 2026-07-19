@@ -24,6 +24,18 @@ func TestTryStmt(t *testing.T) {
 func get() (int, error) { try value := load(); return value, nil }`,
 		},
 		{
+			name: "valid bool",
+			body: `func load() (int, bool) { return 0, false }
+func get() (int, bool) { try value := load(); return value, true }`,
+		},
+		{
+			name: "valid map lookup",
+			body: `func get(values map[string]int, key string) (int, bool) {
+	try value := values[key]
+	return value, true
+}`,
+		},
+		{
 			name: "final result is not error",
 			body: `func load() (int, string) { return 0, "" }
 func get() (int, error) { try value := load(); return value, nil }`,
@@ -34,6 +46,12 @@ func get() (int, error) { try value := load(); return value, nil }`,
 			body: `func load() (int, error) { return 0, nil }
 func get() int { try value := load(); return value }`,
 			want: "try requires the enclosing function to return error as its final result",
+		},
+		{
+			name: "bool propagation requires final bool",
+			body: `func load() (int, bool) { return 0, false }
+func get() (int, error) { try value := load(); return value, nil }`,
+			want: "try requires the enclosing function to return bool as its final result",
 		},
 		{
 			name: "no new user variable",

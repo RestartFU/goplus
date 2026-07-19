@@ -71,9 +71,9 @@ use short names (`case Ok:`). Variants are constructors only: `Result.Ok{}` is
 valid, but `Result.Ok` cannot be used as a field, parameter, alias, or other
 standalone type.
 
-`try` is a contextual propagation statement. It binds every result except the
-final `error`; when that error is non-nil, it returns zero values for the
-enclosing function's earlier results and propagates the error:
+`try` is a contextual propagation statement. It binds every result except a
+final `error` or `bool`. A non-nil error or false boolean returns zero values
+for the enclosing function's earlier results and propagates the final result:
 
 ```go
 func loadUser() (User, error) { /* ... */ }
@@ -85,9 +85,17 @@ func currentUser() (User, error) {
 ```
 
 The called expression's final result and the enclosing function's final result
-must both be `error`. Multiple success values may be bound with
-`try value, count := load()`. Because `try` is contextual, ordinary uses such
-as `try := 1` remain valid.
+must both be `error` or both be `bool`. This makes comma-ok expressions concise:
+
+```go
+func lookup(values map[string]User, name string) (User, bool) {
+	try user := values[name]
+	return user, true
+}
+```
+
+Multiple success values may be bound with `try value, count := load()`.
+Because `try` is contextual, ordinary uses such as `try := 1` remain valid.
 
 They were verified with x/tools commit `635ae9663724` and gopls v0.22.0:
 

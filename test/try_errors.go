@@ -10,6 +10,8 @@ func load() (int, error) { return 0, nil }
 
 func loadString() (int, string) { return 0, "" }
 
+func loadBool() (int, bool) { return 0, false }
+
 func wrongTryResult() (int, error) {
 	try value := loadString() // ERROR "final try result must have type error"
 	return value, nil
@@ -18,6 +20,11 @@ func wrongTryResult() (int, error) {
 func wrongFunctionResult() int {
 	try value := load() // ERROR "try requires the enclosing function to return error as its final result"
 	return value
+}
+
+func wrongBoolFunctionResult() (int, error) {
+	try value := loadBool() // ERROR "try requires the enclosing function to return bool as its final result"
+	return value, nil
 }
 
 func noNewVariable() (int, error) {

@@ -562,15 +562,26 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		lhs := append(slices.Clone(s.Lhs), hidden)
 		vars := check.shortVarDecl(inNode(s, s.TokPos), lhs, s.Rhs)
 
+		propagatesBool := false
 		if len(vars) == len(lhs) {
-			errVar := vars[len(vars)-1]
-			if errVar.typ != nil && !Identical(errVar.typ, universeError) {
-				check.errorf(s, IncompatibleAssign, "final try result must have type error, have %s", errVar.typ)
+			resultVar := vars[len(vars)-1]
+			if resultVar.typ != nil {
+				switch {
+				case Identical(resultVar.typ, universeError):
+				case Identical(resultVar.typ, universeBool):
+					propagatesBool = true
+				default:
+					check.errorf(s, IncompatibleAssign, "final try result must have type error or bool, have %s", resultVar.typ)
+				}
 			}
 		}
 
 		results := check.sig.results
-		if results.Len() == 0 || !Identical(results.At(results.Len()-1).Type(), universeError) {
+		if propagatesBool {
+			if results.Len() == 0 || !Identical(results.At(results.Len()-1).Type(), universeBool) {
+				check.error(s, WrongResultCount, "try requires the enclosing function to return bool as its final result")
+			}
+		} else if results.Len() == 0 || !Identical(results.At(results.Len()-1).Type(), universeError) {
 			check.error(s, WrongResultCount, "try requires the enclosing function to return error as its final result")
 		}
 

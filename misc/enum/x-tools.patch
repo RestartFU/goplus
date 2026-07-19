@@ -316,7 +316,7 @@ index 242074925..98c9c6d74 100644
  		}
  
 +	case *ast.TryStmt:
-+		// The propagated error has no source-level binding. Build the success
++		// The propagated result has no source-level binding. Build the success
 +		// assignments so analyses retain definitions and data flow; control-flow
 +		// propagation is represented by the compiler lowering.
 +		b.assignStmt(fn, s.Lhs, s.Rhs, true)

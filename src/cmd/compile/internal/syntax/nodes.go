@@ -416,12 +416,13 @@ type (
 		simpleStmt
 	}
 
-	// TryStmt binds every result except the final error result. Error is a
-	// compiler-generated name used to lower propagation after type checking.
+	// TryStmt binds every result except the final error or boolean result.
+	// Result is a compiler-generated name used to lower propagation after type
+	// checking.
 	TryStmt struct {
-		Lhs, Rhs Expr
-		Error    *Name // definition used by the lowered assignment
-		ErrorUse *Name // use in the lowered nil check and return
+		Lhs, Rhs  Expr
+		Result    *Name // definition used by the lowered assignment
+		ResultUse *Name // use in the lowered failure check and return
 		stmt
 	}
 

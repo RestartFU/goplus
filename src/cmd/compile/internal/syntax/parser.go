@@ -2792,9 +2792,9 @@ func (p *parser) tryStmt(pos Pos) Stmt {
 	s.pos = pos
 	s.Lhs = left
 	s.Rhs = p.exprList()
-	errorName := fmt.Sprintf(".try%d", p.tryCount)
-	s.Error = NewName(pos, errorName)
-	s.ErrorUse = NewName(pos, errorName)
+	resultName := fmt.Sprintf(".try%d", p.tryCount)
+	s.Result = NewName(pos, resultName)
+	s.ResultUse = NewName(pos, resultName)
 	p.tryCount++
 	return s
 }

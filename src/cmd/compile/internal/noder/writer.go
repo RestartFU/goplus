@@ -1399,7 +1399,7 @@ func (w *writer) stmt1(stmt syntax.Stmt) {
 		}
 
 	case *syntax.TryStmt:
-		lhs := append(syntax.UnpackListExpr(stmt.Lhs), stmt.Error)
+		lhs := append(syntax.UnpackListExpr(stmt.Lhs), stmt.Result)
 		var left syntax.Expr = lhs[0]
 		if len(lhs) > 1 {
 			list := new(syntax.ListExpr)
@@ -1410,7 +1410,7 @@ func (w *writer) stmt1(stmt syntax.Stmt) {
 		w.assignStmt(stmt, left, stmt.Rhs)
 		w.Code(stmtTry)
 		w.pos(stmt)
-		w.expr(stmt.ErrorUse)
+		w.expr(stmt.ResultUse)
 
 	case *syntax.BlockStmt:
 		w.Code(stmtBlock)
