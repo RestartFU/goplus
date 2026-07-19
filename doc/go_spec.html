@@ -7349,13 +7349,17 @@ or because the corresponding goroutine is <a href="#Handling_panics">panicking</
 </p>
 
 <pre class="ebnf">
-DeferStmt = "defer" Expression .
+DeferStmt = "defer" ( Expression | Block ) .
 </pre>
 
 <p>
 The expression must be a function or method call; it cannot be parenthesized.
 Calls of built-in functions are restricted as for
 <a href="#Expression_statements">expression statements</a>.
+A block following <code>defer</code> is equivalent to a parameterless function
+literal containing that block followed by an immediate call. For example,
+<code>defer { cleanup() }</code> is equivalent to
+<code>defer func() { cleanup() }()</code>.
 </p>
 
 <p>

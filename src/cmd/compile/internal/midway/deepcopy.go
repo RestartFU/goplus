@@ -481,7 +481,7 @@ func (c *DeepCopier) CopyStmt(s syntax.Stmt) syntax.Stmt {
 		// TODO this is broken
 		newS = &syntax.BranchStmt{Tok: s.Tok, Label: c.CopyName(s.Label, false), Target: nil} // Targets need fix-up
 	case *syntax.CallStmt:
-		newS = &syntax.CallStmt{Tok: s.Tok, Call: c.CopyExpr(s.Call), DeferAt: c.CopyExpr(s.DeferAt)}
+		newS = &syntax.CallStmt{Tok: s.Tok, Call: c.CopyExpr(s.Call), DeferAt: c.CopyExpr(s.DeferAt), DeferBlock: s.DeferBlock}
 	case *syntax.IfStmt:
 		newS = &syntax.IfStmt{
 			Init: c.CopySimpleStmt(s.Init),
