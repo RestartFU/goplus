@@ -146,7 +146,7 @@ var filemap = map[string]action{
 		renameImportPath(f, `"cmd/compile/internal/syntax"->"go/ast"`)
 		renameSelectorExprs(f,
 			"syntax.IntLit->token.INT", "syntax.FloatLit->token.FLOAT", "syntax.ImagLit->token.IMAG",
-			"syntax.Name->ast.Ident", "key.Value->key.Name", "atyp.Elem->atyp.Elt") // must happen before renaming identifiers
+			"syntax.Name->ast.Ident", "id.Value->id.Name", "key.Value->key.Name", "atyp.Elem->atyp.Elt") // must happen before renaming identifiers
 		renameIdents(f, "syntax->ast")
 		renameSelectors(f, "ElemList->Elts")
 	},

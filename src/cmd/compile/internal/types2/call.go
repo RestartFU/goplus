@@ -193,6 +193,10 @@ func (check *Checker) callExpr(x *operand, call *syntax.CallExpr) exprKind {
 
 	case typexpr:
 		// conversion
+		if check.rejectEnumVariantType(call.Fun, x.typ) {
+			x.mode = invalid
+			return conversion
+		}
 		check.nonGeneric(nil, x)
 		if x.mode == invalid {
 			return conversion
@@ -684,6 +688,19 @@ func (check *Checker) selector(x *operand, e *syntax.SelectorExpr, wantType bool
 	// selector expressions.
 	if ident, ok := e.X.(*syntax.Name); ok {
 		obj := check.lookup(ident.Value)
+		if tname, _ := obj.(*TypeName); tname != nil && tname.typ != nil {
+			if variant := enumVariant(tname.typ, sel); variant != nil {
+				if variant.Obj().Pkg() != check.pkg && !variant.Obj().Exported() {
+					check.errorf(e.Sel, UnexportedName, "cannot refer to unexported enum variant %s", variant)
+				}
+				check.recordUse(ident, tname)
+				check.recordUse(e.Sel, variant.Obj())
+				x.mode = typexpr
+				x.typ = variant
+				x.expr = e
+				return
+			}
+		}
 		if pname, _ := obj.(*PkgName); pname != nil {
 			assert(pname.pkg == check.pkg)
 			check.recordUse(ident, pname)
@@ -775,13 +792,30 @@ func (check *Checker) selector(x *operand, e *syntax.SelectorExpr, wantType bool
 		}
 	}
 
-	check.exprOrType(x, e.X, false)
+	check.exprOrType(x, e.X, true)
 	switch x.mode {
 	case builtin:
 		check.errorf(e.Pos(), UncalledBuiltin, "invalid use of %s in selector expression", x)
 		goto Error
 	case invalid:
 		goto Error
+	}
+
+	if x.mode == typexpr {
+		if variant := enumVariant(x.typ, sel); variant != nil {
+			if variant.Obj().Pkg() != check.pkg && !variant.Obj().Exported() {
+				check.errorf(e.Sel, UnexportedName, "cannot refer to unexported enum variant %s", variant)
+			}
+			check.recordUse(e.Sel, variant.Obj())
+			x.mode = typexpr
+			x.typ = variant
+			x.expr = e
+			return
+		}
+		if isGeneric(x.typ) {
+			check.nonGeneric(nil, x)
+			goto Error
+		}
 	}
 
 	// Avoid crashing when checking an invalid selector in a method declaration
