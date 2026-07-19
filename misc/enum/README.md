@@ -128,6 +128,18 @@ func saveUser(user User) error {
 
 Because `try` is contextual, ordinary uses such as `try := 1` remain valid.
 
+Deferred closures may omit the `func()` wrapper and immediate call:
+
+```go
+defer {
+	cleanup()
+}
+```
+
+This is exactly equivalent to `defer func() { cleanup() }()`. The block is a
+deferred closure, so it retains the same capture, named-result, panic, and
+`recover` behavior as the expanded form.
+
 They were verified with x/tools commit `635ae9663724` and gopls v0.22.0:
 
 ```sh

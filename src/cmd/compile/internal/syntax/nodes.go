@@ -440,9 +440,10 @@ type (
 	}
 
 	CallStmt struct {
-		Tok     token // Go or Defer
-		Call    Expr
-		DeferAt Expr // argument to runtime.deferprocat
+		Tok        token // Go or Defer
+		Call       Expr
+		DeferAt    Expr // argument to runtime.deferprocat
+		DeferBlock bool // Call was written as defer { ... }
 		stmt
 	}
 
