@@ -557,6 +557,23 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			check.assignVar(s.Lhs[0], nil, &x, "assignment")
 		}
 
+	case *ast.TryStmt:
+		hidden := &ast.Ident{NamePos: s.Try, Name: "_"}
+		lhs := append(slices.Clone(s.Lhs), hidden)
+		vars := check.shortVarDecl(inNode(s, s.TokPos), lhs, s.Rhs)
+
+		if len(vars) == len(lhs) {
+			errVar := vars[len(vars)-1]
+			if errVar.typ != nil && !Identical(errVar.typ, universeError) {
+				check.errorf(s, IncompatibleAssign, "final try result must have type error, have %s", errVar.typ)
+			}
+		}
+
+		results := check.sig.results
+		if results.Len() == 0 || !Identical(results.At(results.Len()-1).Type(), universeError) {
+			check.error(s, WrongResultCount, "try requires the enclosing function to return error as its final result")
+		}
+
 	case *ast.GoStmt:
 		check.suspendedCall("go", s.Call)
 

@@ -33,6 +33,8 @@ type parser struct {
 	fnest  int    // function nesting level (for error handling)
 	xnest  int    // expression nesting level (for complit ambiguity resolution)
 	indent []byte // tracing support
+
+	tryCount int // compiler-generated error names for try statements
 }
 
 func (p *parser) init(file *PosBase, r io.Reader, errh ErrorHandler, pragh PragmaHandler, mode Mode) {
@@ -2665,6 +2667,15 @@ func (p *parser) stmtOrNil() Stmt {
 	// look for it first before doing anything more expensive.
 	if p.tok == _Name {
 		p.clearPragma()
+		if p.lit == "try" {
+			pos := p.pos()
+			name := p.name()
+			if p.tok == _Name {
+				return p.tryStmt(pos)
+			}
+			lhs := p.binaryExpr(p.pexpr(name, false), 0)
+			return p.simpleStmt(p.exprListFrom(lhs), 0)
+		}
 		lhs := p.exprList()
 		if label, ok := lhs.(*Name); ok && p.tok == _Colon {
 			return p.labeledStmtOrNil(label)
@@ -2757,6 +2768,35 @@ func (p *parser) stmtOrNil() Stmt {
 	}
 
 	return nil
+}
+
+func (p *parser) tryStmt(pos Pos) Stmt {
+	var lhs []Expr
+	for {
+		lhs = append(lhs, p.name())
+		if !p.got(_Comma) {
+			break
+		}
+	}
+	p.want(_Define)
+
+	left := lhs[0]
+	if len(lhs) > 1 {
+		list := new(ListExpr)
+		list.pos = lhs[0].Pos()
+		list.ElemList = lhs
+		left = list
+	}
+
+	s := new(TryStmt)
+	s.pos = pos
+	s.Lhs = left
+	s.Rhs = p.exprList()
+	errorName := fmt.Sprintf(".try%d", p.tryCount)
+	s.Error = NewName(pos, errorName)
+	s.ErrorUse = NewName(pos, errorName)
+	p.tryCount++
+	return s
 }
 
 // StatementList = { Statement ";" } .

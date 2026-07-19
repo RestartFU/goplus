@@ -2434,6 +2434,34 @@ func (p *parser) parseStmt() (s ast.Stmt) {
 		defer un(trace(p, "Statement"))
 	}
 
+	if p.tok == token.IDENT && p.lit == "try" {
+		try := p.parseIdent()
+		if p.tok == token.IDENT {
+			idents := p.parseIdentList()
+			lhs := make([]ast.Expr, len(idents))
+			for i, ident := range idents {
+				lhs[i] = ident
+			}
+			tokPos := p.expect(token.DEFINE)
+			rhs := p.parseList(true)
+			p.expectSemi()
+			return &ast.TryStmt{Try: try.Pos(), Lhs: lhs, TokPos: tokPos, Rhs: rhs}
+		}
+
+		x := p.parsePrimaryExpr(try)
+		x = p.parseBinaryExpr(x, token.LowestPrec+1)
+		list := []ast.Expr{x}
+		for p.tok == token.COMMA {
+			p.next()
+			list = append(list, p.parseExpr())
+		}
+		s, _ = p.finishSimpleStmt(list, labelOk)
+		if _, isLabeledStmt := s.(*ast.LabeledStmt); !isLabeledStmt {
+			p.expectSemi()
+		}
+		return s
+	}
+
 	switch p.tok {
 	case token.CONST, token.TYPE, token.VAR:
 		s = &ast.DeclStmt{Decl: p.parseDecl(stmtStart)}

@@ -1,4 +1,4 @@
-# Enum-aware gopls
+# Go+ editor tooling
 
 ## Install Go+
 
@@ -36,7 +36,7 @@ this fork, apply both companion patches to compatible `golang.org/x/tools`
 and `golang.org/x/tools/gopls` checkouts, then build gopls with this fork as
 `GOROOT`.
 
-The patches add the enum AST nodes to x/tools' optimized inspector and make
+The patches add the Go+ AST nodes to x/tools' optimized inspector and make
 gopls enum-aware throughout parsing, type-reference indexing, hover,
 definition, references, rename, semantic tokens, workspace/document symbols,
 fill-switch actions, and narrowed-case completion. Compiler-generated marker
@@ -70,6 +70,24 @@ short constructor is inferred (`var x Result = Ok{}`); enum switch cases also
 use short names (`case Ok:`). Variants are constructors only: `Result.Ok{}` is
 valid, but `Result.Ok` cannot be used as a field, parameter, alias, or other
 standalone type.
+
+`try` is a contextual propagation statement. It binds every result except the
+final `error`; when that error is non-nil, it returns zero values for the
+enclosing function's earlier results and propagates the error:
+
+```go
+func loadUser() (User, error) { /* ... */ }
+
+func currentUser() (User, error) {
+	try user := loadUser()
+	return user, nil
+}
+```
+
+The called expression's final result and the enclosing function's final result
+must both be `error`. Multiple success values may be bound with
+`try value, count := load()`. Because `try` is contextual, ordinary uses such
+as `try := 1` remain valid.
 
 They were verified with x/tools commit `635ae9663724` and gopls v0.22.0:
 

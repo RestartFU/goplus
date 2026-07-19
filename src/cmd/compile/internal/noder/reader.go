@@ -1873,6 +1873,20 @@ func (r *reader) stmt1(tag codeStmt, out *ir.Nodes) ir.Node {
 
 	case stmtSwitch:
 		return r.switchStmt(label)
+
+	case stmtTry:
+		pos := r.pos()
+		err := r.expr()
+		cond := typecheck.Expr(ir.NewBinaryExpr(pos, ir.ONE, err, typecheck.NodNil()))
+
+		resultTypes := r.curfn.Type().Results()
+		results := make([]ir.Node, len(resultTypes))
+		for i := range results {
+			results[i] = ir.NewZero(pos, resultTypes[i].Type)
+		}
+		results[len(results)-1] = err
+		ret := ir.NewReturnStmt(pos, results)
+		return ir.NewIfStmt(pos, cond, []ir.Node{ret}, nil)
 	}
 }
 

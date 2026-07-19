@@ -582,6 +582,32 @@ func (f *Finder) stmt(s ast.Stmt) {
 			f.expr(s.Rhs[0])
 		}
 
+	case *ast.TryStmt:
+		var rhsTuple types.Type
+		if len(s.Rhs) == 1 {
+			rhsTuple = f.exprN(s.Rhs[0])
+		}
+		for i, expr := range s.Lhs {
+			var lhs, rhs types.Type
+			if rhsTuple == nil {
+				rhs = f.expr(s.Rhs[i])
+			} else {
+				rhs = f.extract(rhsTuple, i)
+			}
+			if id, ok := expr.(*ast.Ident); ok && id.Name != "_" {
+				if obj, ok := f.info.Defs[id]; ok {
+					lhs = obj.Type()
+				}
+			}
+			if lhs == nil {
+				lhs = f.expr(expr)
+			}
+			f.assign(lhs, rhs)
+		}
+		if rhsTuple == nil {
+			f.expr(s.Rhs[len(s.Rhs)-1])
+		}
+
 	case *ast.GoStmt:
 		f.expr(s.Call)
 

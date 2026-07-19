@@ -339,6 +339,10 @@ func (a *application) apply(parent ast.Node, name string, iter *iterator, n ast.
 		a.applyList(n, "Lhs")
 		a.applyList(n, "Rhs")
 
+	case *ast.TryStmt:
+		a.applyList(n, "Lhs")
+		a.applyList(n, "Rhs")
+
 	case *ast.GoStmt:
 		a.apply(n, "Call", nil, n.Call)
 

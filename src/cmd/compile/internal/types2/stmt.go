@@ -532,6 +532,38 @@ func (check *Checker) stmt(ctxt stmtContext, s syntax.Stmt) {
 		check.binary(&x, nil, lhs[0], rhs[0], s.Op)
 		check.assignVar(lhs[0], nil, &x, "assignment")
 
+	case *syntax.TryStmt:
+		userLhs := syntax.UnpackListExpr(s.Lhs)
+		hasNew := false
+		for _, expr := range userLhs {
+			if name, _ := expr.(*syntax.Name); name != nil && name.Value != "_" && check.scope.Lookup(name.Value) == nil {
+				hasNew = true
+				break
+			}
+		}
+		if !hasNew {
+			check.softErrorf(s, NoNewVar, "no new variables on left side of :=")
+		}
+
+		lhs := append(userLhs, s.Error)
+		check.shortVarDecl(s.Pos(), lhs, syntax.UnpackListExpr(s.Rhs))
+
+		errObj, _ := check.lookup(s.Error.Value).(*Var)
+		if errObj != nil {
+			check.usedVars[errObj] = true
+			check.recordUse(s.ErrorUse, errObj)
+			errorType := Universe.Lookup("error").Type()
+			if errObj.typ != nil && !Identical(errObj.typ, errorType) {
+				check.errorf(s.Rhs, IncompatibleAssign, "final try result must have type error, have %s", errObj.typ)
+			}
+		}
+
+		results := check.sig.results
+		errorType := Universe.Lookup("error").Type()
+		if results.Len() == 0 || !Identical(results.At(results.Len()-1).Type(), errorType) {
+			check.error(s, WrongResultCount, "try requires the enclosing function to return error as its final result")
+		}
+
 	case *syntax.CallStmt:
 		kind := "go"
 		if s.Tok == syntax.Defer {

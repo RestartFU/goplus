@@ -550,6 +550,10 @@ func (p *printer) printRawNode(n Node) {
 			p.print(n.Rhs)
 		}
 
+	case *TryStmt:
+		p.print(_Name, "try")
+		p.print(blank, n.Lhs, blank, _Define, blank, n.Rhs)
+
 	case *CallStmt:
 		p.print(n.Tok, blank, n.Call)
 

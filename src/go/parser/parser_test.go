@@ -1127,6 +1127,45 @@ type I enum[int]
 	}
 }
 
+func TestParseTryStmt(t *testing.T) {
+	const src = `package p
+func load() (string, int, error) { return "", 0, nil }
+func get() (string, int, error) {
+	try value, count := load()
+	return value, count, nil
+}
+`
+	f, err := ParseFile(token.NewFileSet(), "try.go", src, DeclarationErrors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := f.Decls[1].(*ast.FuncDecl)
+	stmt, ok := fn.Body.List[0].(*ast.TryStmt)
+	if !ok {
+		t.Fatalf("statement has type %T, want *ast.TryStmt", fn.Body.List[0])
+	}
+	if len(stmt.Lhs) != 2 || len(stmt.Rhs) != 1 {
+		t.Fatalf("try shape is %d lhs and %d rhs, want 2 and 1", len(stmt.Lhs), len(stmt.Rhs))
+	}
+}
+
+func TestTryIsContextualKeyword(t *testing.T) {
+	tests := []string{
+		"try := 1",
+		"try++",
+		"try()",
+		"_ = try",
+	}
+	for _, stmt := range tests {
+		t.Run(stmt, func(t *testing.T) {
+			src := "package p\nfunc f() { " + stmt + " }\n"
+			if _, err := ParseFile(token.NewFileSet(), "try.go", src, DeclarationErrors); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestEnumLookaheadDoesNotDuplicateErrors(t *testing.T) {
 	const src = "package p; type E[T @] enum { A }"
 	_, err := ParseFile(token.NewFileSet(), "enum.go", src, 0)

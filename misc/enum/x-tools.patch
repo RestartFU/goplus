@@ -1,8 +1,68 @@
+diff --git a/go/analysis/passes/unreachable/unreachable.go b/go/analysis/passes/unreachable/unreachable.go
+index 532f38fe9..d623be506 100644
+--- a/go/analysis/passes/unreachable/unreachable.go
++++ b/go/analysis/passes/unreachable/unreachable.go
+@@ -80,6 +80,7 @@ func (d *deadState) findLabels(stmt ast.Stmt) {
+ 		log.Fatalf("%s: internal error in findLabels: unexpected statement %T", d.pass.Fset.Position(x.Pos()), x)
+ 
+ 	case *ast.AssignStmt,
++		*ast.TryStmt,
+ 		*ast.BadStmt,
+ 		*ast.DeclStmt,
+ 		*ast.DeferStmt,
+@@ -215,6 +216,7 @@ func (d *deadState) findDead(stmt ast.Stmt) {
+ 		log.Fatalf("%s: internal error in findDead: unexpected statement %T", d.pass.Fset.Position(x.Pos()), x)
+ 
+ 	case *ast.AssignStmt,
++		*ast.TryStmt,
+ 		*ast.BadStmt,
+ 		*ast.DeclStmt,
+ 		*ast.DeferStmt,
+diff --git a/go/ast/astutil/enclosing.go b/go/ast/astutil/enclosing.go
+index 0fb4e7eea..092c654f7 100644
+--- a/go/ast/astutil/enclosing.go
++++ b/go/ast/astutil/enclosing.go
+@@ -221,6 +221,11 @@ func childrenOf(n ast.Node) []ast.Node {
+ 		children = append(children,
+ 			tok(n.TokPos, len(n.Tok.String())))
+ 
++	case *ast.TryStmt:
++		children = append(children,
++			tok(n.Try, len("try")),
++			tok(n.TokPos, len(":=")))
++
+ 	case *ast.BasicLit:
+ 		children = append(children,
+ 			tok(n.ValuePos, len(n.Value)))
+@@ -514,6 +519,8 @@ func NodeDescription(n ast.Node) string {
+ 		return "array type"
+ 	case *ast.AssignStmt:
+ 		return "assignment"
++	case *ast.TryStmt:
++		return "try statement"
+ 	case *ast.BadDecl:
+ 		return "bad declaration"
+ 	case *ast.BadExpr:
+diff --git a/go/ast/astutil/rewrite.go b/go/ast/astutil/rewrite.go
+index 4ad054930..45a2d28a7 100644
+--- a/go/ast/astutil/rewrite.go
++++ b/go/ast/astutil/rewrite.go
+@@ -339,6 +339,10 @@ func (a *application) apply(parent ast.Node, name string, iter *iterator, n ast.
+ 		a.applyList(n, "Lhs")
+ 		a.applyList(n, "Rhs")
+ 
++	case *ast.TryStmt:
++		a.applyList(n, "Lhs")
++		a.applyList(n, "Rhs")
++
+ 	case *ast.GoStmt:
+ 		a.apply(n, "Call", nil, n.Call)
+ 
 diff --git a/go/ast/edge/edge.go b/go/ast/edge/edge.go
-index 8dc4dd1..da7bfae 100644
+index 8dc4dd150..67253c9a0 100644
 --- a/go/ast/edge/edge.go
 +++ b/go/ast/edge/edge.go
-@@ -165,6 +165,14 @@ const (
+@@ -165,6 +165,16 @@ const (
  	ValueSpec_Names
  	ValueSpec_Type
  	ValueSpec_Values
@@ -14,10 +74,12 @@ index 8dc4dd1..da7bfae 100644
 +	EnumVariant_Doc
 +	EnumVariant_Fields
 +	EnumVariant_Name
++	TryStmt_Lhs
++	TryStmt_Rhs
  
  	maxKind
  )
-@@ -296,4 +304,12 @@ var fieldInfos = [...]fieldInfo{
+@@ -296,4 +306,14 @@ var fieldInfos = [...]fieldInfo{
  	ValueSpec_Names:       info[*ast.ValueSpec]("Names"),
  	ValueSpec_Type:        info[*ast.ValueSpec]("Type"),
  	ValueSpec_Values:      info[*ast.ValueSpec]("Values"),
@@ -29,21 +91,55 @@ index 8dc4dd1..da7bfae 100644
 +	EnumVariant_Doc:       info[*ast.EnumVariant]("Doc"),
 +	EnumVariant_Fields:    info[*ast.EnumVariant]("Fields"),
 +	EnumVariant_Name:      info[*ast.EnumVariant]("Name"),
++	TryStmt_Lhs:           info[*ast.TryStmt]("Lhs"),
++	TryStmt_Rhs:           info[*ast.TryStmt]("Rhs"),
  }
+diff --git a/go/ast/inspector/inspector_test.go b/go/ast/inspector/inspector_test.go
+index 316e7c2ed..e9a1504f3 100644
+--- a/go/ast/inspector/inspector_test.go
++++ b/go/ast/inspector/inspector_test.go
+@@ -75,6 +75,26 @@ func TestInspectAllNodes(t *testing.T) {
+ 	compare(t, nodesA, nodesB)
+ }
+ 
++func TestInspectTryStmt(t *testing.T) {
++	const src = `package p
++func load() (int, error) { return 0, nil }
++func get() (int, error) {
++	try value := load()
++	return value, nil
++}
++`
++	file, err := parser.ParseFile(token.NewFileSet(), "try.go", src, parser.SkipObjectResolution)
++	if err != nil {
++		t.Fatal(err)
++	}
++	inspect := inspector.New([]*ast.File{file})
++	var tries int
++	inspect.Preorder([]ast.Node{(*ast.TryStmt)(nil)}, func(ast.Node) { tries++ })
++	if tries != 1 {
++		t.Fatalf("inspector visited %d try statements, want 1", tries)
++	}
++}
++
+ func TestInspectGenericNodes(t *testing.T) {
+ 	// src is using the 16 identifiers i0, i1, ... i15 so
+ 	// we can easily verify that we've found all of them.
 diff --git a/go/ast/inspector/typeof.go b/go/ast/inspector/typeof.go
-index 9852331..8fed1a5 100644
+index 9852331a3..9d342cf8b 100644
 --- a/go/ast/inspector/typeof.go
 +++ b/go/ast/inspector/typeof.go
-@@ -71,6 +71,8 @@ const (
+@@ -71,6 +71,9 @@ const (
  	nTypeSwitchStmt
  	nUnaryExpr
  	nValueSpec
 +	nEnumDecl
 +	nEnumVariant
++	nTryStmt
  )
  
  // typeOf returns a distinct single-bit value that represents the type of n.
-@@ -211,6 +213,10 @@ func typeOf(n ast.Node) uint64 {
+@@ -211,6 +214,12 @@ func typeOf(n ast.Node) uint64 {
  		return 1 << nUnaryExpr
  	case *ast.ValueSpec:
  		return 1 << nValueSpec
@@ -51,14 +147,27 @@ index 9852331..8fed1a5 100644
 +		return 1 << nEnumDecl
 +	case *ast.EnumVariant:
 +		return 1 << nEnumVariant
++	case *ast.TryStmt:
++		return 1 << nTryStmt
  	}
  	return 0
  }
 diff --git a/go/ast/inspector/walk.go b/go/ast/inspector/walk.go
-index 5f1c93c..2944e39 100644
+index 5f1c93c8a..03e325d3a 100644
 --- a/go/ast/inspector/walk.go
 +++ b/go/ast/inspector/walk.go
-@@ -309,6 +309,28 @@ func walk(v *visitor, ek edge.Kind, index int, node ast.Node) {
+@@ -183,6 +183,10 @@ func walk(v *visitor, ek edge.Kind, index int, node ast.Node) {
+ 		walkList(v, edge.AssignStmt_Lhs, n.Lhs)
+ 		walkList(v, edge.AssignStmt_Rhs, n.Rhs)
+ 
++	case *ast.TryStmt:
++		walkList(v, edge.TryStmt_Lhs, n.Lhs)
++		walkList(v, edge.TryStmt_Rhs, n.Rhs)
++
+ 	case *ast.GoStmt:
+ 		walk(v, edge.GoStmt_Call, -1, n.Call)
+ 
+@@ -309,6 +313,28 @@ func walk(v *visitor, ek edge.Kind, index int, node ast.Node) {
  		}
  		walkList(v, edge.GenDecl_Specs, n.Specs)
  
@@ -88,10 +197,20 @@ index 5f1c93c..2944e39 100644
  		if n.Doc != nil {
  			walk(v, edge.FuncDecl_Doc, -1, n.Doc)
 diff --git a/go/cfg/builder.go b/go/cfg/builder.go
-index f16cd42..305aabe 100644
+index f16cd4230..723cfc529 100644
 --- a/go/cfg/builder.go
 +++ b/go/cfg/builder.go
-@@ -53,7 +53,10 @@ start:
+@@ -33,7 +33,8 @@ start:
+ 		*ast.IncDecStmt,
+ 		*ast.GoStmt,
+ 		*ast.EmptyStmt,
+-		*ast.AssignStmt:
++		*ast.AssignStmt,
++		*ast.TryStmt:
+ 		// No effect on control flow.
+ 		b.add(s)
+ 
+@@ -53,7 +54,10 @@ start:
  
  	case *ast.DeclStmt:
  		// Treat each var ValueSpec as a separate statement.
@@ -104,7 +223,7 @@ index f16cd42..305aabe 100644
  			for _, spec := range d.Specs {
  				if spec, ok := spec.(*ast.ValueSpec); ok {
 diff --git a/go/ssa/builder.go b/go/ssa/builder.go
-index 2420749..c900317 100644
+index 242074925..98c9c6d74 100644
 --- a/go/ssa/builder.go
 +++ b/go/ssa/builder.go
 @@ -1432,6 +1432,13 @@ func (b *builder) compLit(fn *Function, addr Value, e *ast.CompositeLit, isZero
@@ -192,8 +311,21 @@ index 2420749..c900317 100644
  		if d.Tok == token.VAR {
  			for _, spec := range d.Specs {
  				if vs, ok := spec.(*ast.ValueSpec); ok {
+@@ -2749,6 +2811,12 @@ start:
+ 			b.assignOp(fn, b.addr(fn, s.Lhs[0], false), b.expr(fn, s.Rhs[0]), op, s.Pos())
+ 		}
+ 
++	case *ast.TryStmt:
++		// The propagated error has no source-level binding. Build the success
++		// assignments so analyses retain definitions and data flow; control-flow
++		// propagation is represented by the compiler lowering.
++		b.assignStmt(fn, s.Lhs, s.Rhs, true)
++
+ 	case *ast.GoStmt:
+ 		// The "intrinsics" new/make/len/cap are forbidden here.
+ 		// panic is treated like an ordinary function call.
 diff --git a/go/ssa/builder_test.go b/go/ssa/builder_test.go
-index adb04cd..54281cb 100644
+index adb04cde7..384fe47f5 100644
 --- a/go/ssa/builder_test.go
 +++ b/go/ssa/builder_test.go
 @@ -34,6 +34,47 @@ import (
@@ -244,8 +376,23 @@ index adb04cd..54281cb 100644
  // Tests that programs partially loaded from gc object files contain
  // functions with no code for the external portions, but are otherwise ok.
  func TestBuildPackage(t *testing.T) {
+diff --git a/internal/astutil/free/free.go b/internal/astutil/free/free.go
+index 2c4d2c4e5..c74814b43 100644
+--- a/internal/astutil/free/free.go
++++ b/internal/astutil/free/free.go
+@@ -148,6 +148,10 @@ func (v *freeVisitor) Visit(n ast.Node) ast.Visitor {
+ 			walkSlice(v, n.Lhs)
+ 		}
+ 
++	case *ast.TryStmt:
++		walkSlice(v, n.Rhs)
++		v.shortVarDecl(n.Lhs)
++
+ 	case *ast.LabeledStmt:
+ 		// Ignore labels.
+ 		v.walk(n.Stmt)
 diff --git a/internal/gcimporter/gcimporter_test.go b/internal/gcimporter/gcimporter_test.go
-index 0f08f47..769b772 100644
+index 0f08f477f..0c6ac0938 100644
 --- a/internal/gcimporter/gcimporter_test.go
 +++ b/internal/gcimporter/gcimporter_test.go
 @@ -771,6 +771,135 @@ func TestIssue57015(t *testing.T) {
@@ -385,7 +532,7 @@ index 0f08f47..769b772 100644
  // containing type errors.
  //
 diff --git a/internal/gcimporter/iexport.go b/internal/gcimporter/iexport.go
-index 4c9450f..599c571 100644
+index 4c9450f4e..e33653b2e 100644
 --- a/internal/gcimporter/iexport.go
 +++ b/internal/gcimporter/iexport.go
 @@ -85,6 +85,7 @@
@@ -430,7 +577,7 @@ index 4c9450f..599c571 100644
  		}
  
 diff --git a/internal/gcimporter/iexport_common_test.go b/internal/gcimporter/iexport_common_test.go
-index 00dc2ff..1bd8427 100644
+index 00dc2ffd5..1bd8427ae 100644
 --- a/internal/gcimporter/iexport_common_test.go
 +++ b/internal/gcimporter/iexport_common_test.go
 @@ -9,4 +9,4 @@ package gcimporter
@@ -440,7 +587,7 @@ index 00dc2ff..1bd8427 100644
 -const IExportVersion = iexportVersionGenerics
 +const IExportVersion = iexportVersion
 diff --git a/internal/gcimporter/iimport.go b/internal/gcimporter/iimport.go
-index 1ee4e93..0b73f6f 100644
+index 1ee4e9354..963c727b6 100644
 --- a/internal/gcimporter/iimport.go
 +++ b/internal/gcimporter/iimport.go
 @@ -52,9 +52,10 @@ const (
@@ -488,7 +635,7 @@ index 1ee4e93..0b73f6f 100644
  				named.AddMethod(types.NewFunc(mpos, pkg, mname, msig))
  			}
 diff --git a/internal/refactor/inline/calleefx.go b/internal/refactor/inline/calleefx.go
-index 001bf61..631d5a3 100644
+index 001bf61e9..631d5a334 100644
 --- a/internal/refactor/inline/calleefx.go
 +++ b/internal/refactor/inline/calleefx.go
 @@ -228,7 +228,10 @@ func calleefx(info *types.Info, body *ast.BlockStmt, paramInfos map[*types.Var]*
@@ -504,7 +651,7 @@ index 001bf61..631d5a3 100644
  				switch spec := spec.(type) {
  				case *ast.ValueSpec:
 diff --git a/internal/refactor/inline/inline.go b/internal/refactor/inline/inline.go
-index cf4c587..7b2a42d 100644
+index cf4c58717..7b2a42d4d 100644
 --- a/internal/refactor/inline/inline.go
 +++ b/internal/refactor/inline/inline.go
 @@ -3139,14 +3139,22 @@ func declares(stmts []ast.Stmt) map[string]bool {
@@ -538,7 +685,7 @@ index cf4c587..7b2a42d 100644
  			}
  
 diff --git a/internal/typesinternal/element.go b/internal/typesinternal/element.go
-index 5fe4d8a..a5c26ad 100644
+index 5fe4d8abc..a5c26ad07 100644
 --- a/internal/typesinternal/element.go
 +++ b/internal/typesinternal/element.go
 @@ -37,6 +37,12 @@ func ForEachElement(rtypes *typeutil.Map, msets *typeutil.MethodSetCache, T type
@@ -555,7 +702,7 @@ index 5fe4d8a..a5c26ad 100644
  			// but, as noted in golang.org/cl/65450043,
  			// the Signature.Recv field is ignored by
 diff --git a/internal/typesinternal/element_test.go b/internal/typesinternal/element_test.go
-index 7d360db..962d1ac 100644
+index 7d360db3d..962d1ac55 100644
 --- a/internal/typesinternal/element_test.go
 +++ b/internal/typesinternal/element_test.go
 @@ -30,6 +30,7 @@ type C = T
@@ -576,7 +723,7 @@ index 7d360db..962d1ac 100644
  		// alias type
  		{"D", []string{"int"}},
 diff --git a/refactor/satisfy/find.go b/refactor/satisfy/find.go
-index 3d21ce6..e76aebe 100644
+index 3d21ce6d2..c8efaf5e4 100644
 --- a/refactor/satisfy/find.go
 +++ b/refactor/satisfy/find.go
 @@ -508,7 +508,10 @@ func (f *Finder) stmt(s ast.Stmt) {
@@ -591,3 +738,36 @@ index 3d21ce6..e76aebe 100644
  		if d.Tok == token.VAR { // ignore consts
  			for _, spec := range d.Specs {
  				f.valueSpec(spec.(*ast.ValueSpec))
+@@ -564,6 +567,32 @@ func (f *Finder) stmt(s ast.Stmt) {
+ 			f.expr(s.Rhs[0])
+ 		}
+ 
++	case *ast.TryStmt:
++		var rhsTuple types.Type
++		if len(s.Rhs) == 1 {
++			rhsTuple = f.exprN(s.Rhs[0])
++		}
++		for i, expr := range s.Lhs {
++			var lhs, rhs types.Type
++			if rhsTuple == nil {
++				rhs = f.expr(s.Rhs[i])
++			} else {
++				rhs = f.extract(rhsTuple, i)
++			}
++			if id, ok := expr.(*ast.Ident); ok && id.Name != "_" {
++				if obj, ok := f.info.Defs[id]; ok {
++					lhs = obj.Type()
++				}
++			}
++			if lhs == nil {
++				lhs = f.expr(expr)
++			}
++			f.assign(lhs, rhs)
++		}
++		if rhsTuple == nil {
++			f.expr(s.Rhs[len(s.Rhs)-1])
++		}
++
+ 	case *ast.GoStmt:
+ 		f.expr(s.Call)
+ 

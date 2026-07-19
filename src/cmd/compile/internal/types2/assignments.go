@@ -526,7 +526,7 @@ func (check *Checker) assignVars(lhs, orig_rhs []syntax.Expr) {
 	// orig_rhs[0] was already evaluated
 }
 
-func (check *Checker) shortVarDecl(pos poser, lhs, rhs []syntax.Expr) {
+func (check *Checker) shortVarDecl(pos poser, lhs, rhs []syntax.Expr) []*Var {
 	top := len(check.delayed)
 	scope := check.scope
 
@@ -594,7 +594,7 @@ func (check *Checker) shortVarDecl(pos poser, lhs, rhs []syntax.Expr) {
 
 	if len(newVars) == 0 && !hasErr {
 		check.softErrorf(pos, NoNewVar, "no new variables on left side of :=")
-		return
+		return lhsVars
 	}
 
 	// declare new variables
@@ -606,4 +606,5 @@ func (check *Checker) shortVarDecl(pos poser, lhs, rhs []syntax.Expr) {
 	for _, obj := range newVars {
 		check.declare(scope, nil, obj, scopePos) // id = nil: recordDef already called
 	}
+	return lhsVars
 }

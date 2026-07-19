@@ -1,6 +1,6 @@
 diff --git a/internal/analysis/fillswitch/enum_test.go b/internal/analysis/fillswitch/enum_test.go
 new file mode 100644
-index 0000000..5dc5279
+index 000000000..138234363
 --- /dev/null
 +++ b/internal/analysis/fillswitch/enum_test.go
 @@ -0,0 +1,199 @@
@@ -204,7 +204,7 @@ index 0000000..5dc5279
 +	}
 +}
 diff --git a/internal/analysis/fillswitch/fillswitch.go b/internal/analysis/fillswitch/fillswitch.go
-index 7b1a7e8..301464e 100644
+index 7b1a7e8cb..9658d3d17 100644
 --- a/internal/analysis/fillswitch/fillswitch.go
 +++ b/internal/analysis/fillswitch/fillswitch.go
 @@ -10,6 +10,7 @@ import (
@@ -243,28 +243,25 @@ index 7b1a7e8..301464e 100644
  
  	existingCases := caseTypes(stmt.Body, info)
  	// Gather accessible package-level concrete types
-@@ -136,14 +146,16 @@ func suggestedFixTypeSwitch(stmt *ast.TypeSwitchStmt, pkg *types.Package, info *
+@@ -136,12 +146,14 @@ func suggestedFixTypeSwitch(stmt *ast.TypeSwitchStmt, pkg *types.Package, info *
  }
  
  func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.Info) *analysis.SuggestedFix {
 -	if hasDefaultCase(stmt.Body) {
--		return nil
--	}
--
--	namedType, ok := info.TypeOf(stmt.Tag).(*types.Named)
 +	namedType, ok := types.Unalias(info.TypeOf(stmt.Tag)).(*types.Named)
- 	if !ok {
++	if !ok {
  		return nil
  	}
+-
+-	namedType, ok := info.TypeOf(stmt.Tag).(*types.Named)
+-	if !ok {
 +	if enumType := namedType.EnumType(); enumType != nil && enumType.Origin() == namedType.Origin() {
 +		return suggestedFixEnumSwitch(stmt.End(), stmt.Body, stmt.Tag, namedType, false, pkg, info)
 +	}
 +	if hasDefaultCase(stmt.Body) {
-+		return nil
-+	}
+ 		return nil
+ 	}
  
- 	existingCases := caseConsts(stmt.Body, info)
- 	// Gather accessible named constants of the same type as the switch value.
 @@ -186,6 +198,89 @@ func suggestedFixSwitch(stmt *ast.SwitchStmt, pkg *types.Package, info *types.In
  	}
  }
@@ -356,10 +353,21 @@ index 7b1a7e8..301464e 100644
  	var dottedBuf bytes.Buffer
  	// writeDotted emits a dotted path a.b.c.
 diff --git a/internal/cache/parsego/resolver.go b/internal/cache/parsego/resolver.go
-index 450fcc0..b490c3c 100644
+index 450fcc0a2..b37933afa 100644
 --- a/internal/cache/parsego/resolver.go
 +++ b/internal/cache/parsego/resolver.go
-@@ -507,6 +507,28 @@ func (r *resolver) Visit(node ast.Node) ast.Visitor {
+@@ -319,6 +319,10 @@ func (r *resolver) Visit(node ast.Node) ast.Visitor {
+ 			r.walkExprs(n.Lhs)
+ 		}
+ 
++	case *ast.TryStmt:
++		r.walkExprs(n.Rhs)
++		r.shortVarDecl(&ast.AssignStmt{Lhs: n.Lhs, TokPos: n.TokPos, Tok: token.DEFINE, Rhs: n.Rhs})
++
+ 	case *ast.BranchStmt:
+ 		// add to list of unresolved targets
+ 		if n.Tok != token.FALLTHROUGH && n.Label != nil {
+@@ -507,6 +511,28 @@ func (r *resolver) Visit(node ast.Node) ast.Visitor {
  			r.declare(n, nil, r.pkgScope, ast.Fun, n.Name)
  		}
  
@@ -388,8 +396,48 @@ index 450fcc0..b490c3c 100644
  	default:
  		return r
  	}
+diff --git a/internal/cache/parsego/resolver_test.go b/internal/cache/parsego/resolver_test.go
+index 44908b7ec..8fa274b4b 100644
+--- a/internal/cache/parsego/resolver_test.go
++++ b/internal/cache/parsego/resolver_test.go
+@@ -5,7 +5,9 @@
+ package parsego
+ 
+ import (
++	"context"
+ 	"go/ast"
++	"go/token"
+ 	"go/types"
+ 	"os"
+ 	"strings"
+@@ -17,6 +19,25 @@ import (
+ 	"golang.org/x/tools/internal/testenv"
+ )
+ 
++func TestResolveTryStmt(t *testing.T) {
++	const src = `package p
++func load() (int, error) { return 0, nil }
++func get() (int, error) {
++	try value := load()
++	return value, nil
++}
++`
++	pgf, _ := Parse(context.Background(), token.NewFileSet(), "file://try.go", []byte(src), Full, false)
++	pgf.Resolve()
++	fn := pgf.File.Decls[1].(*ast.FuncDecl)
++	stmt := fn.Body.List[0].(*ast.TryStmt)
++	def := stmt.Lhs[0].(*ast.Ident)
++	use := fn.Body.List[1].(*ast.ReturnStmt).Results[0].(*ast.Ident)
++	if def.Obj == nil || use.Obj != def.Obj {
++		t.Fatalf("try binding did not resolve: def=%p use=%p", def.Obj, use.Obj)
++	}
++}
++
+ // TestGoplsSourceDoesNotUseObjectResolution verifies that gopls does not
+ // read fields that are set during syntactic object resolution, except in
+ // locations where we can guarantee that object resolution has occurred. This
 diff --git a/internal/cache/symbols/symbols.go b/internal/cache/symbols/symbols.go
-index baef055..0a8d325 100644
+index baef055f6..0a8d3258f 100644
 --- a/internal/cache/symbols/symbols.go
 +++ b/internal/cache/symbols/symbols.go
 @@ -108,6 +108,17 @@ func symbolizeFile(pgf *parsego.File) []Symbol {
@@ -411,7 +459,7 @@ index baef055..0a8d325 100644
  	}
  
 diff --git a/internal/cache/typerefs/refs.go b/internal/cache/typerefs/refs.go
-index 3b9763e..eb994c4 100644
+index 3b9763edd..eb994c40c 100644
 --- a/internal/cache/typerefs/refs.go
 +++ b/internal/cache/typerefs/refs.go
 @@ -168,16 +168,23 @@ func index(pgfs []*parsego.File, imports map[metadata.ImportPath]*metadata.Packa
@@ -502,7 +550,7 @@ index 3b9763e..eb994c4 100644
  		// nothing to do
  
 diff --git a/internal/cache/typerefs/refs_test.go b/internal/cache/typerefs/refs_test.go
-index 1e98fb5..8d26601 100644
+index 1e98fb585..8d26601b8 100644
 --- a/internal/cache/typerefs/refs_test.go
 +++ b/internal/cache/typerefs/refs_test.go
 @@ -453,6 +453,26 @@ var y ext.Y
@@ -533,7 +581,7 @@ index 1e98fb5..8d26601 100644
  			label: "invalid decls",
  			srcs: []string{`package p
 diff --git a/internal/golang/completion/completion.go b/internal/golang/completion/completion.go
-index 70a1468..6b0912a 100644
+index 70a1468de..0857c5338 100644
 --- a/internal/golang/completion/completion.go
 +++ b/internal/golang/completion/completion.go
 @@ -1344,6 +1344,25 @@ func (c *completer) selector(ctx context.Context, sel *ast.SelectorExpr) error {
@@ -572,8 +620,82 @@ index 70a1468..6b0912a 100644
  		// to the other side of the cb() queue?
  		if c.tooNew(obj) {
  			continue // std method too new for file's Go version
+@@ -2209,6 +2231,11 @@ Nodes:
+ 			inf.objType = objType
+ 			inf.assignees = assignees
+ 			return inf
++		case *ast.TryStmt:
++			objType, assignees := expectedTryStmtTypes(c.pkg, node, c.pos)
++			inf.objType = objType
++			inf.assignees = assignees
++			return inf
+ 		case *ast.ValueSpec:
+ 			inf.objType = expectedValueSpecType(c.pkg, node, c.pos)
+ 			return
+@@ -2425,6 +2452,13 @@ func inferExpectedResultTypes(c *completer, callNodeIdx int) []types.Type {
+ 		} else if objType != nil {
+ 			expectedResults = append(expectedResults, objType)
+ 		}
++	case *ast.TryStmt:
++		objType, assignees := expectedTryStmtTypes(c.pkg, node, c.pos)
++		if len(assignees) > 0 {
++			return assignees
++		} else if objType != nil {
++			expectedResults = append(expectedResults, objType)
++		}
+ 	case *ast.ValueSpec:
+ 		if resultType := expectedValueSpecType(c.pkg, node, c.pos); resultType != nil {
+ 			expectedResults = append(expectedResults, resultType)
+@@ -2523,6 +2557,15 @@ func expectedAssignStmtTypes(pkg *cache.Package, node *ast.AssignStmt, pos token
+ 	return objType, assignees
+ }
+ 
++func expectedTryStmtTypes(pkg *cache.Package, node *ast.TryStmt, pos token.Pos) (objType types.Type, assignees []types.Type) {
++	assignment := &ast.AssignStmt{Lhs: node.Lhs, TokPos: node.TokPos, Tok: token.DEFINE, Rhs: node.Rhs}
++	objType, assignees = expectedAssignStmtTypes(pkg, assignment, pos)
++	if len(node.Rhs) <= 1 && len(assignees) > 0 {
++		assignees = append(assignees, types.Universe.Lookup("error").Type())
++	}
++	return objType, assignees
++}
++
+ // expectedReturnStmtType returns the expected type of a return statement.
+ // Returns nil if enclosingSig is nil.
+ func expectedReturnStmtType(enclosingSig *types.Signature, node *ast.ReturnStmt, pos token.Pos) types.Type {
+diff --git a/internal/golang/completion/postfix_snippets.go b/internal/golang/completion/postfix_snippets.go
+index 084eafe0f..f63a9f1bd 100644
+--- a/internal/golang/completion/postfix_snippets.go
++++ b/internal/golang/completion/postfix_snippets.go
+@@ -547,6 +547,8 @@ func (c *completer) addPostfixSnippetCandidates(ctx context.Context, sel *ast.Se
+ 				// detect that "foo." makes up the entire statement since the
+ 				// apparent selector spans lines.
+ 				stmtOK = safetoken.Line(tokFile, c.pos) < safetoken.Line(tokFile, p.TokPos)
++			case *ast.TryStmt:
++				stmtOK = safetoken.Line(tokFile, c.pos) < safetoken.Line(tokFile, p.TokPos)
+ 			}
+ 			break
+ 		}
+diff --git a/internal/golang/completion/util.go b/internal/golang/completion/util.go
+index 0b07129ad..447e3da5c 100644
+--- a/internal/golang/completion/util.go
++++ b/internal/golang/completion/util.go
+@@ -206,6 +206,14 @@ func enclosingDeclLHS(path []ast.Node) []*ast.Ident {
+ 				}
+ 			}
+ 			return ids
++		case *ast.TryStmt:
++			ids := make([]*ast.Ident, 0, len(n.Lhs))
++			for _, e := range n.Lhs {
++				if id, ok := e.(*ast.Ident); ok {
++					ids = append(ids, id)
++				}
++			}
++			return ids
+ 		}
+ 	}
+ 
 diff --git a/internal/golang/definition.go b/internal/golang/definition.go
-index f28fa9b..a41507a 100644
+index f28fa9b28..a41507a5c 100644
 --- a/internal/golang/definition.go
 +++ b/internal/golang/definition.go
 @@ -405,7 +405,7 @@ func ObjectLocation(ctx context.Context, fset *token.FileSet, snapshot *cache.Sn
@@ -585,8 +707,60 @@ index f28fa9b..a41507a 100644
  	if pkgName, ok := obj.(*types.PkgName); ok && pkgName.Imported().Name() == pkgName.Name() {
  		nameLen = len(pkgName.Imported().Path()) + len(`""`)
  	}
+diff --git a/internal/golang/extract.go b/internal/golang/extract.go
+index d7d181289..dfeed6e47 100644
+--- a/internal/golang/extract.go
++++ b/internal/golang/extract.go
+@@ -1423,7 +1423,31 @@ func collectFreeVars(info *types.Info, file *ast.File, start, end token.Pos, nod
+ 					break
+ 				}
+ 			}
+-			return false
++		case *ast.TryStmt:
++			for _, assignment := range n.Lhs {
++				lhs, ok := assignment.(*ast.Ident)
++				if !ok {
++					continue
++				}
++				obj, _ := id(lhs)
++				if obj == nil || seen[obj] == nil {
++					continue
++				}
++				seen[obj].assigned = true
++				if firstUseIn[obj] != lhs.Pos() {
++					continue
++				}
++				for _, expr := range n.Rhs {
++					if referencesObj(info, expr, obj) {
++						continue
++					}
++					if _, ok := seen[obj]; !ok {
++						continue
++					}
++					seen[obj].defined = true
++					break
++				}
++			}
+ 		case *ast.DeclStmt:
+ 			gen, ok := n.Decl.(*ast.GenDecl)
+ 			if !ok {
+diff --git a/internal/golang/highlight.go b/internal/golang/highlight.go
+index 6c46bf1a3..78cc80b6c 100644
+--- a/internal/golang/highlight.go
++++ b/internal/golang/highlight.go
+@@ -654,6 +654,10 @@ func highlightIdentifier(cur inspector.Cursor, info *types.Info, result map[astu
+ 			for _, s := range n.Lhs {
+ 				highlightWriteInExpr(s)
+ 			}
++		case *ast.TryStmt:
++			for _, s := range n.Lhs {
++				highlightWriteInExpr(s)
++			}
+ 		case *ast.GenDecl:
+ 			if n.Tok == token.CONST || n.Tok == token.VAR {
+ 				for _, spec := range n.Specs {
 diff --git a/internal/golang/hover.go b/internal/golang/hover.go
-index 60b7b69..367797a 100644
+index 60b7b69e0..367797afa 100644
 --- a/internal/golang/hover.go
 +++ b/internal/golang/hover.go
 @@ -405,7 +405,7 @@ func hover(ctx context.Context, snapshot *cache.Snapshot, fh file.Handle, rng pr
@@ -768,8 +942,32 @@ index 60b7b69..367797a 100644
  		case *ast.GenDecl:
  			for _, s := range n.Specs {
  				switch s := s.(type) {
+diff --git a/internal/golang/inlay_hint.go b/internal/golang/inlay_hint.go
+index 9e23e76fc..c596cbebf 100644
+--- a/internal/golang/inlay_hint.go
++++ b/internal/golang/inlay_hint.go
+@@ -227,7 +227,7 @@ func funcTypeParams(info *types.Info, pgf *parsego.File, qual types.Qualifier, c
+ }
+ 
+ func assignVariableTypes(info *types.Info, pgf *parsego.File, qual types.Qualifier, cur inspector.Cursor, add func(protocol.InlayHint)) {
+-	for node := range cur.Preorder((*ast.AssignStmt)(nil), (*ast.ValueSpec)(nil)) {
++	for node := range cur.Preorder((*ast.AssignStmt)(nil), (*ast.TryStmt)(nil), (*ast.ValueSpec)(nil)) {
+ 		switch n := node.Node().(type) {
+ 		case *ast.AssignStmt:
+ 			if n.Tok != token.DEFINE {
+@@ -236,6 +236,10 @@ func assignVariableTypes(info *types.Info, pgf *parsego.File, qual types.Qualifi
+ 			for _, v := range n.Lhs {
+ 				variableType(info, pgf, qual, v, add)
+ 			}
++		case *ast.TryStmt:
++			for _, v := range n.Lhs {
++				variableType(info, pgf, qual, v, add)
++			}
+ 		case *ast.GenDecl:
+ 			if n.Tok != token.VAR {
+ 				continue
 diff --git a/internal/golang/rename.go b/internal/golang/rename.go
-index 9e04f8d..2dbcb9f 100644
+index 9e04f8dff..bdc0864cb 100644
 --- a/internal/golang/rename.go
 +++ b/internal/golang/rename.go
 @@ -89,6 +89,7 @@ type renamer struct {
@@ -780,7 +978,7 @@ index 9e04f8d..2dbcb9f 100644
  	satisfyConstraints map[satisfy.Constraint]bool
  	msets              typeutil.MethodSetCache
  	changeMethods      bool
-@@ -180,7 +180,7 @@ func PrepareRename(ctx context.Context, snapshot *cache.Snapshot, f file.Handle,
+@@ -180,7 +181,7 @@ func PrepareRename(ctx context.Context, snapshot *cache.Snapshot, f file.Handle,
  	}
  	return &PrepareItem{
  		Range: nodeRng,
@@ -789,7 +987,7 @@ index 9e04f8d..2dbcb9f 100644
  	}, nil, nil
  }
  
-@@ -614,7 +614,7 @@ func renameOrdinary(ctx context.Context, snapshot *cache.Snapshot, uri protocol.
+@@ -614,7 +615,7 @@ func renameOrdinary(ctx context.Context, snapshot *cache.Snapshot, uri protocol.
  	// Pick a representative object arbitrarily.
  	// (All share the same name, pos, and kind.)
  	obj, node := targets[0].obj, targets[0].cur.Node()
@@ -798,7 +996,7 @@ index 9e04f8d..2dbcb9f 100644
  		return nil, fmt.Errorf("old and new names are the same: %s", newName)
  	}
  	if err := checkRenamable(obj, node); err != nil {
-@@ -636,6 +636,19 @@ func renameOrdinary(ctx context.Context, snapshot *cache.Snapshot, uri protocol.
+@@ -636,6 +637,19 @@ func renameOrdinary(ctx context.Context, snapshot *cache.Snapshot, uri protocol.
  		}
  	}
  
@@ -909,7 +1107,7 @@ index 9e04f8d..2dbcb9f 100644
  			return decl.Doc
  		// For {Type,Value}Spec, if the doc on the spec is absent,
 diff --git a/internal/golang/rename_check.go b/internal/golang/rename_check.go
-index 3c67d54..8c972df 100644
+index 3c67d5416..8c972df72 100644
 --- a/internal/golang/rename_check.go
 +++ b/internal/golang/rename_check.go
 @@ -130,7 +130,7 @@ func (r *renamer) checkInFileBlock(from *types.PkgName) {
@@ -949,10 +1147,20 @@ index 3c67d54..8c972df 100644
  			// sub-block conflict
  			if deeper(toBlock, fromBlock) {
 diff --git a/internal/golang/semtok.go b/internal/golang/semtok.go
-index 4d0a835..8d27607 100644
+index 4d0a835ca..7d386c20f 100644
 --- a/internal/golang/semtok.go
 +++ b/internal/golang/semtok.go
-@@ -432,6 +432,9 @@ func (tv *tokenVisitor) inspect(n ast.Node) (descend bool) {
+@@ -379,6 +379,9 @@ func (tv *tokenVisitor) inspect(n ast.Node) (descend bool) {
+ 	case *ast.ArrayType:
+ 	case *ast.AssignStmt:
+ 		tv.token(n.TokPos, len(n.Tok.String()), semtok.TokOperator)
++	case *ast.TryStmt:
++		tv.token(n.Try, len("try"), semtok.TokKeyword)
++		tv.token(n.TokPos, len(":="), semtok.TokOperator)
+ 	case *ast.BasicLit:
+ 		if n.Kind == token.STRING {
+ 			if strings.Contains(n.Value, "\n") {
+@@ -432,6 +435,9 @@ func (tv *tokenVisitor) inspect(n ast.Node) (descend bool) {
  	case *ast.Ellipsis:
  		tv.token(n.Ellipsis, len("..."), semtok.TokOperator)
  	case *ast.EmptyStmt:
@@ -962,7 +1170,19 @@ index 4d0a835..8d27607 100644
  	case *ast.ExprStmt:
  	case *ast.Field:
  	case *ast.FieldList:
-@@ -836,6 +839,10 @@ func (tv *tokenVisitor) unkIdent(id *ast.Ident) (semtok.Type, []semtok.Modifier)
+@@ -831,11 +837,22 @@ func (tv *tokenVisitor) unkIdent(id *ast.Ident) (semtok.Type, []semtok.Modifier)
+ 		}
+ 		// RHS, = x
+ 		return semtok.TokVariable, nil
++	case *ast.TryStmt:
++		for _, p := range parent.Lhs {
++			if p == id {
++				return semtok.TokVariable, def
++			}
++		}
++		return semtok.TokVariable, nil
+ 	case *ast.TypeSpec: // it's a type if it is either the Name or the Type
+ 		if id == parent.Type {
  			def = nil
  		}
  		return semtok.TokType, def
@@ -974,7 +1194,7 @@ index 4d0a835..8d27607 100644
  		// ident could be type in a field, or a method in an interface type, or a variable
  		if id == parent.Type {
 diff --git a/internal/golang/symbols.go b/internal/golang/symbols.go
-index f41b56c..547bc02 100644
+index f41b56cd6..547bc02ed 100644
 --- a/internal/golang/symbols.go
 +++ b/internal/golang/symbols.go
 @@ -71,6 +71,11 @@ func DocumentSymbols(ctx context.Context, snapshot *cache.Snapshot, fh file.Hand
@@ -1044,7 +1264,7 @@ index f41b56c..547bc02 100644
  	switch typExpr := typExpr.(type) {
  	case *ast.StructType:
 diff --git a/internal/golang/util.go b/internal/golang/util.go
-index a25cf46..f9d200d 100644
+index a25cf463d..f9d200d77 100644
 --- a/internal/golang/util.go
 +++ b/internal/golang/util.go
 @@ -23,6 +23,26 @@ import (
@@ -1075,7 +1295,7 @@ index a25cf46..f9d200d 100644
  // and reports whether it [ast.IsGenerated].
  func IsGenerated(ctx context.Context, snapshot *cache.Snapshot, uri protocol.DocumentURI) bool {
 diff --git a/internal/settings/settings.go b/internal/settings/settings.go
-index 52c7786..78a97d3 100644
+index 52c7786bf..78a97d336 100644
 --- a/internal/settings/settings.go
 +++ b/internal/settings/settings.go
 @@ -1706,12 +1706,12 @@ func asStringSlice(value any) ([]string, error) {
@@ -1096,7 +1316,7 @@ index 52c7786..78a97d3 100644
  func asEnum[S ~string](value any, options ...S) (S, error) {
 diff --git a/internal/test/integration/completion/enum_test.go b/internal/test/integration/completion/enum_test.go
 new file mode 100644
-index 0000000..9314bf0
+index 000000000..9314bf0a2
 --- /dev/null
 +++ b/internal/test/integration/completion/enum_test.go
 @@ -0,0 +1,88 @@
@@ -1189,7 +1409,7 @@ index 0000000..9314bf0
 +	return labels
 +}
 diff --git a/internal/test/integration/misc/hover_test.go b/internal/test/integration/misc/hover_test.go
-index b2e9af7..d21b535 100644
+index b2e9af7b9..1b4443182 100644
 --- a/internal/test/integration/misc/hover_test.go
 +++ b/internal/test/integration/misc/hover_test.go
 @@ -424,6 +424,106 @@ func Hello() string {
