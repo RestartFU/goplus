@@ -22,8 +22,8 @@ Go+ toolchain with `go+`, `gofmt+`, `gopls+`, and `goimports+`; see
 
 Windows prereleases also provide `goplus-installer-windows-amd64.exe` on the
 [GitHub releases page](https://github.com/RestartFU/goplus/releases). The
-installer requires Git and Go 1.26 or newer because it builds the tagged Go+
-toolchain and editor tools locally before installing them.
+installer downloads the matching precompiled toolchain and editor tools, so it
+does not require an existing Go installation or Git.
 
 #### Binary Distributions
 

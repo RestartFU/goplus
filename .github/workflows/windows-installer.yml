@@ -42,16 +42,27 @@ jobs:
             throw "installer version is $version, want $env:RELEASE_TAG"
           }
 
-      - name: Validate Windows installation
+      - name: Build Windows payload
         shell: pwsh
         run: |
-          $prefix = Join-Path $env:RUNNER_TEMP "GoPlus"
-          .\install-goplus.ps1 -Prefix $prefix -NoPathUpdate
+          $payload = Join-Path $env:RUNNER_TEMP "GoPlusPayload"
+          .\install-goplus.ps1 -Prefix $payload -NoPathUpdate
+          & (Join-Path $payload "bin\go+.exe") version
+          & (Join-Path $payload "bin\gopls+.exe") version
+          Compress-Archive -Path (Join-Path $payload "*") -DestinationPath .\dist\goplus-windows-amd64.zip
+
+      - name: Validate packaged installer
+        shell: pwsh
+        run: |
+          $prefix = Join-Path $env:RUNNER_TEMP "GoPlusInstalled"
+          .\dist\goplus-installer-windows-amd64.exe -archive .\dist\goplus-windows-amd64.zip -prefix $prefix -no-path-update
           & (Join-Path $prefix "bin\go+.exe") version
           & (Join-Path $prefix "bin\gopls+.exe") version
 
       - uses: actions/upload-artifact@v7
         with:
-          name: goplus-installer-windows-amd64
-          path: dist/goplus-installer-windows-amd64.exe
+          name: goplus-windows-amd64-release
+          path: |
+            dist/goplus-installer-windows-amd64.exe
+            dist/goplus-windows-amd64.zip
           if-no-files-found: error

@@ -2,6 +2,15 @@
 
 ## Install Go+
 
+On Windows amd64, download `goplus-installer-windows-amd64.exe` from the
+[releases page](https://github.com/RestartFU/goplus/releases) and run it. The
+installer downloads the matching precompiled Go+ archive, installs it under
+`%LOCALAPPDATA%\GoPlus`, and adds its `bin` directory to the user PATH. It does
+not require Go or Git. Pass `-prefix C:\path\to\GoPlus` to choose another
+location or `-no-path-update` to leave the user PATH unchanged.
+
+### Build from source
+
 The repository installers build a private full GOROOT and the patched editor
 tooling. They expose four commands without replacing an existing Go install:
 `go+`, `gofmt+`, `gopls+`, and `goimports+`. The `gopls+` and `goimports+`

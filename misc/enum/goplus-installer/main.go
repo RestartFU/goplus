@@ -1,4 +1,4 @@
-// goplus-installer installs a tagged Go+ release on Windows.
+// goplus-installer installs a precompiled Go+ release on Windows.
 package main
 
 import (
@@ -18,13 +18,18 @@ import (
 	"time"
 )
 
-const repository = "RestartFU/goplus"
+const (
+	repository     = "RestartFU/goplus"
+	releaseArchive = "goplus-windows-amd64.zip"
+	managedMarker  = ".goplus-managed"
+)
 
 var releaseTag = "dev"
 
 func main() {
 	log.SetFlags(0)
 	prefix := flag.String("prefix", "", "installation directory (defaults to %LOCALAPPDATA%\\GoPlus)")
+	archive := flag.String("archive", "", "install a local precompiled archive instead of downloading one")
 	noPathUpdate := flag.Bool("no-path-update", false, "do not add the Go+ bin directory to the user PATH")
 	showVersion := flag.Bool("version", false, "print the installer version")
 	flag.Parse()
@@ -36,103 +41,194 @@ func main() {
 	if runtime.GOOS != "windows" {
 		log.Fatal("the Go+ Windows installer must run on Windows")
 	}
-	if err := install(*prefix, *noPathUpdate); err != nil {
+	if err := install(*prefix, *archive, *noPathUpdate); err != nil {
 		log.Fatalf("install Go+ %s: %v", releaseTag, err)
 	}
 }
 
-func install(prefix string, noPathUpdate bool) error {
-	archiveURL, err := sourceArchiveURL(releaseTag)
+func install(prefix, localArchive string, noPathUpdate bool) error {
+	var err error
+	prefix, err = installPrefix(prefix)
 	if err != nil {
 		return err
 	}
 
-	work, err := os.MkdirTemp("", "goplus-installer-")
-	if err != nil {
-		return fmt.Errorf("create temporary directory: %w", err)
-	}
-	defer os.RemoveAll(work)
-
-	archivePath := filepath.Join(work, "source.zip")
-	fmt.Printf("Downloading Go+ %s...\n", releaseTag)
-	if err := download(archiveURL, archivePath); err != nil {
-		return err
-	}
-	archive, err := os.Open(archivePath)
-	if err != nil {
-		return fmt.Errorf("open source archive: %w", err)
-	}
-	info, err := archive.Stat()
-	if err != nil {
-		archive.Close()
-		return fmt.Errorf("inspect source archive: %w", err)
-	}
-	sourceDirectory := filepath.Join(work, "source")
-	if err := extractArchive(archive, info.Size(), sourceDirectory); err != nil {
-		archive.Close()
-		return err
-	}
-	if err := archive.Close(); err != nil {
-		return fmt.Errorf("close source archive: %w", err)
+	archivePath := localArchive
+	if archivePath == "" {
+		archiveURL, err := releaseArchiveURL(releaseTag)
+		if err != nil {
+			return err
+		}
+		work, err := os.MkdirTemp("", "goplus-download-")
+		if err != nil {
+			return fmt.Errorf("create download directory: %w", err)
+		}
+		defer os.RemoveAll(work)
+		archivePath = filepath.Join(work, releaseArchive)
+		fmt.Printf("Downloading Go+ %s...\n", releaseTag)
+		if err := download(archiveURL, archivePath); err != nil {
+			return err
+		}
 	}
 
-	installer, err := findPowerShellInstaller(sourceDirectory)
-	if err != nil {
+	fmt.Printf("Installing Go+ %s...\n", releaseTag)
+	if err := installArchive(archivePath, prefix); err != nil {
 		return err
 	}
-	powerShell, err := findPowerShell()
-	if err != nil {
-		return err
+	if !noPathUpdate {
+		if err := updateUserPath(filepath.Join(prefix, "bin")); err != nil {
+			return err
+		}
 	}
-	arguments := []string{"-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", installer}
-	if prefix != "" {
-		arguments = append(arguments, "-Prefix", prefix)
-	}
-	if noPathUpdate {
-		arguments = append(arguments, "-NoPathUpdate")
-	}
-
-	fmt.Println("Building and installing Go+...")
-	command := exec.Command(powerShell, arguments...)
-	command.Stdin = os.Stdin
+	command := exec.Command(filepath.Join(prefix, "bin", "go+.exe"), "version")
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
 	if err := command.Run(); err != nil {
-		return fmt.Errorf("run Windows installer: %w", err)
+		return fmt.Errorf("verify installed go+: %w", err)
 	}
-	fmt.Printf("Go+ %s installed successfully.\n", releaseTag)
+	fmt.Printf("Go+ %s installed successfully. Open a new terminal before using it.\n", releaseTag)
 	return nil
 }
 
-func sourceArchiveURL(tag string) (string, error) {
+func installPrefix(prefix string) (string, error) {
+	if prefix == "" {
+		localAppData := os.Getenv("LOCALAPPDATA")
+		if localAppData == "" {
+			return "", errors.New("LOCALAPPDATA is not set")
+		}
+		prefix = filepath.Join(localAppData, "GoPlus")
+	}
+	absolute, err := filepath.Abs(prefix)
+	if err != nil {
+		return "", fmt.Errorf("resolve install prefix: %w", err)
+	}
+	absolute = filepath.Clean(absolute)
+	root := filepath.VolumeName(absolute) + string(filepath.Separator)
+	home, _ := os.UserHomeDir()
+	if strings.EqualFold(absolute, root) || home != "" && strings.EqualFold(absolute, filepath.Clean(home)) {
+		return "", fmt.Errorf("refusing unsafe install prefix %q", absolute)
+	}
+	return absolute, nil
+}
+
+func releaseArchiveURL(tag string) (string, error) {
 	if tag == "" || tag == "dev" || url.PathEscape(tag) != tag {
 		return "", fmt.Errorf("invalid release tag %q", tag)
 	}
-	return fmt.Sprintf("https://github.com/%s/archive/refs/tags/%s.zip", repository, tag), nil
+	return fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repository, tag, releaseArchive), nil
 }
 
 func download(sourceURL, destination string) error {
 	client := &http.Client{Timeout: 10 * time.Minute}
 	response, err := client.Get(sourceURL)
 	if err != nil {
-		return fmt.Errorf("download source archive: %w", err)
+		return fmt.Errorf("download release archive: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("download source archive: %s", response.Status)
+		return fmt.Errorf("download release archive: %s", response.Status)
 	}
 
 	file, err := os.Create(destination)
 	if err != nil {
-		return fmt.Errorf("create source archive: %w", err)
+		return fmt.Errorf("create release archive: %w", err)
 	}
 	_, copyErr := io.Copy(file, response.Body)
 	closeErr := file.Close()
 	if copyErr != nil {
-		return fmt.Errorf("save source archive: %w", copyErr)
+		return fmt.Errorf("save release archive: %w", copyErr)
 	}
 	if closeErr != nil {
-		return fmt.Errorf("close source archive: %w", closeErr)
+		return fmt.Errorf("close release archive: %w", closeErr)
+	}
+	return nil
+}
+
+func installArchive(archivePath, prefix string) error {
+	if err := validateExistingPrefix(prefix); err != nil {
+		return err
+	}
+	parent := filepath.Dir(prefix)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return fmt.Errorf("create install parent: %w", err)
+	}
+	stage, err := os.MkdirTemp(parent, ".goplus-install-")
+	if err != nil {
+		return fmt.Errorf("create install staging directory: %w", err)
+	}
+	defer os.RemoveAll(stage)
+
+	archive, err := os.Open(archivePath)
+	if err != nil {
+		return fmt.Errorf("open release archive: %w", err)
+	}
+	info, err := archive.Stat()
+	if err != nil {
+		archive.Close()
+		return fmt.Errorf("inspect release archive: %w", err)
+	}
+	if err := extractArchive(archive, info.Size(), stage); err != nil {
+		archive.Close()
+		return err
+	}
+	if err := archive.Close(); err != nil {
+		return fmt.Errorf("close release archive: %w", err)
+	}
+	for _, required := range []string{managedMarker, filepath.Join("bin", "go+.exe")} {
+		if _, err := os.Stat(filepath.Join(stage, required)); err != nil {
+			return fmt.Errorf("release archive missing %s: %w", required, err)
+		}
+	}
+
+	backup := fmt.Sprintf("%s.backup.%d", prefix, os.Getpid())
+	if _, err := os.Lstat(backup); err == nil {
+		return fmt.Errorf("backup path already exists: %s", backup)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect backup path: %w", err)
+	}
+	hadExisting := false
+	if _, err := os.Lstat(prefix); err == nil {
+		if err := os.Rename(prefix, backup); err != nil {
+			return fmt.Errorf("back up existing installation: %w", err)
+		}
+		hadExisting = true
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect existing installation: %w", err)
+	}
+	if err := os.Rename(stage, prefix); err != nil {
+		if hadExisting {
+			_ = os.Rename(backup, prefix)
+		}
+		return fmt.Errorf("activate installation: %w", err)
+	}
+	if hadExisting {
+		if err := os.RemoveAll(backup); err != nil {
+			return fmt.Errorf("remove previous installation: %w", err)
+		}
+	}
+	return nil
+}
+
+func validateExistingPrefix(prefix string) error {
+	info, err := os.Lstat(prefix)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect install prefix: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("install prefix is not a regular directory: %s", prefix)
+	}
+	entries, err := os.ReadDir(prefix)
+	if err != nil {
+		return fmt.Errorf("read install prefix: %w", err)
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	if _, err := os.Stat(filepath.Join(prefix, managedMarker)); err != nil {
+		return fmt.Errorf("refusing to replace unmanaged non-empty directory %s", prefix)
 	}
 	return nil
 }
@@ -140,13 +236,16 @@ func download(sourceURL, destination string) error {
 func extractArchive(source io.ReaderAt, size int64, destination string) error {
 	archive, err := zip.NewReader(source, size)
 	if err != nil {
-		return fmt.Errorf("open source archive: %w", err)
+		return fmt.Errorf("open release archive: %w", err)
 	}
 	if err := os.MkdirAll(destination, 0o755); err != nil {
-		return fmt.Errorf("create source directory: %w", err)
+		return fmt.Errorf("create staging directory: %w", err)
 	}
 	for _, entry := range archive.File {
 		cleanName := filepath.Clean(filepath.FromSlash(entry.Name))
+		if cleanName == "." && entry.FileInfo().IsDir() {
+			continue
+		}
 		if cleanName == "." || filepath.IsAbs(cleanName) || cleanName == ".." || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
 			return fmt.Errorf("unsafe archive path %q", entry.Name)
 		}
@@ -188,15 +287,20 @@ func extractArchive(source io.ReaderAt, size int64, destination string) error {
 	return nil
 }
 
-func findPowerShellInstaller(sourceDirectory string) (string, error) {
-	matches, err := filepath.Glob(filepath.Join(sourceDirectory, "*", "install-goplus.ps1"))
+func updateUserPath(binDirectory string) error {
+	powerShell, err := findPowerShell()
 	if err != nil {
-		return "", fmt.Errorf("find Windows installer: %w", err)
+		return err
 	}
-	if len(matches) != 1 {
-		return "", fmt.Errorf("source archive contains %d Windows installers", len(matches))
+	const script = `$entries = @([Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Where-Object { $_ }); if (-not ($entries | Where-Object { $_.TrimEnd('\') -ieq $env:GOPLUS_BIN_DIR.TrimEnd('\') })) { [Environment]::SetEnvironmentVariable('Path', (($env:GOPLUS_BIN_DIR + ';' + ($entries -join ';')).TrimEnd(';')), 'User') }`
+	command := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-Command", script)
+	command.Env = append(os.Environ(), "GOPLUS_BIN_DIR="+binDirectory)
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	if err := command.Run(); err != nil {
+		return fmt.Errorf("update user PATH: %w", err)
 	}
-	return matches[0], nil
+	return nil
 }
 
 func findPowerShell() (string, error) {
@@ -205,5 +309,5 @@ func findPowerShell() (string, error) {
 			return path, nil
 		}
 	}
-	return "", errors.New("PowerShell is required")
+	return "", errors.New("PowerShell is required to update the user PATH")
 }
