@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..5dc5279
 --- /dev/null
 +++ b/internal/analysis/fillswitch/enum_test.go
-@@ -0,0 +1,188 @@
+@@ -0,0 +1,199 @@
 +// Copyright 2026 The Go Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style
 +// license that can be found in the LICENSE file.
@@ -52,6 +52,13 @@ index 0000000..5dc5279
 +	switch empty {
 +	}
 +}
++
++type Alias = Option[string]
++
++func useAlias(option Alias) {
++	switch option {
++	}
++}
 +`
 +	fset := token.NewFileSet()
 +	file, err := parser.ParseFile(fset, "enum.go", src, 0)
@@ -69,8 +76,8 @@ index 0000000..5dc5279
 +	config := &types.Config{Error: func(error) {}}
 +	pkg, _ := config.Check("p", fset, []*ast.File{file}, info)
 +	diagnostics := fillswitch.Diagnose(file, token.NoPos, token.NoPos, pkg, info)
-+	if len(diagnostics) != 2 {
-+		t.Fatalf("got %d diagnostics, want 2", len(diagnostics))
++	if len(diagnostics) != 3 {
++		t.Fatalf("got %d diagnostics, want 3", len(diagnostics))
 +	}
 +	fix := diagnostics[0].SuggestedFixes[0]
 +	if len(fix.TextEdits) != 1 {
@@ -90,6 +97,10 @@ index 0000000..5dc5279
 +	emptyText := string(emptyFix.TextEdits[0].NewText)
 +	if !strings.Contains(emptyText, "case nil:") || strings.Contains(emptyText, "case None:") {
 +		t.Fatalf("empty enum switch edit = %q", emptyText)
++	}
++	aliasText := string(diagnostics[2].SuggestedFixes[0].TextEdits[0].NewText)
++	if !strings.Contains(aliasText, "case Some:") || !strings.Contains(aliasText, "case None:") || !strings.Contains(aliasText, "case nil:") {
++		t.Fatalf("aliased enum switch edit = %q", aliasText)
 +	}
 +}
 +
@@ -240,7 +251,8 @@ index 7b1a7e8..301464e 100644
 -		return nil
 -	}
 -
- 	namedType, ok := info.TypeOf(stmt.Tag).(*types.Named)
+-	namedType, ok := info.TypeOf(stmt.Tag).(*types.Named)
++	namedType, ok := types.Unalias(info.TypeOf(stmt.Tag)).(*types.Named)
  	if !ok {
  		return nil
  	}
