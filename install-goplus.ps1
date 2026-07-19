@@ -26,16 +26,28 @@ function Invoke-Native {
     }
 }
 
+function Get-NormalizedDirectoryPath {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $FullPath = [IO.Path]::GetFullPath($Path)
+    $Root = [IO.Path]::GetPathRoot($FullPath)
+    while ($FullPath.Length -gt $Root.Length -and ($FullPath.EndsWith('\') -or $FullPath.EndsWith('/'))) {
+        $FullPath = $FullPath.Substring(0, $FullPath.Length - 1)
+    }
+    return $FullPath
+}
+
 if (-not (Get-Command git.exe -ErrorAction SilentlyContinue)) {
     throw "git.exe is required"
 }
 
 $RepoRoot = $PSScriptRoot
-$Prefix = [IO.Path]::GetFullPath($Prefix)
+$Prefix = Get-NormalizedDirectoryPath $Prefix
 $PrefixParent = Split-Path -Parent $Prefix
-$HomePath = [IO.Path]::GetFullPath($HOME).TrimEnd('\')
+$HomePath = Get-NormalizedDirectoryPath $HOME
 $DriveRoot = [IO.Path]::GetPathRoot($Prefix).TrimEnd('\')
-if (-not $PrefixParent -or $Prefix.TrimEnd('\') -eq $HomePath -or $Prefix.TrimEnd('\') -eq $DriveRoot) {
+$PrefixForSafety = $Prefix.TrimEnd('\')
+if (-not $PrefixParent -or $PrefixForSafety -eq $HomePath.TrimEnd('\') -or $PrefixForSafety -eq $DriveRoot) {
     throw "refusing unsafe install prefix: $Prefix"
 }
 $MarkerName = ".goplus-managed"
