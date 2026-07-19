@@ -399,6 +399,10 @@ func (enc *Encoder) encodeInterface(b *encBuffer, iv reflect.Value) {
 
 	ut := userType(iv.Elem().Type())
 	namei, ok := concreteTypeToName.Load(ut.base)
+	if !ok && reflect.IsEnumVariant(ut.base) {
+		RegisterName(reflect.EnumVariantName(ut.base), iv.Elem().Interface())
+		namei, ok = concreteTypeToName.Load(ut.base)
+	}
 	if !ok {
 		errorf("type not registered for interface: %s", ut.base)
 	}
