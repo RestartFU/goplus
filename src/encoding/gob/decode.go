@@ -705,6 +705,12 @@ func (dec *Decoder) decodeInterface(ityp reflect.Type, state *decoderState, valu
 	// The concrete type must be registered.
 	typi, ok := nameToConcreteType.Load(string(name))
 	if !ok {
+		if typ := reflect.EnumVariantByName(string(name)); typ != nil {
+			RegisterName(string(name), reflect.Zero(typ).Interface())
+			typi, ok = nameToConcreteType.Load(string(name))
+		}
+	}
+	if !ok {
 		errorf("name not registered for interface: %q", name)
 	}
 	typ := typi.(reflect.Type)

@@ -93,6 +93,18 @@ func (p Pos) IsValid() bool {
 	return p != NoPos
 }
 
+// Cmp compares positions p and q and returns -1, 0, or +1 depending on
+// whether p is before, equal to, or after q.
+func (p Pos) Cmp(q Pos) int {
+	if p < q {
+		return -1
+	}
+	if p > q {
+		return 1
+	}
+	return 0
+}
+
 // -----------------------------------------------------------------------------
 // File
 

@@ -17,6 +17,7 @@ package reflect
 
 import (
 	"internal/abi"
+	"internal/bytealg"
 	"internal/goarch"
 	"iter"
 	"runtime"
@@ -1374,6 +1375,60 @@ func TypeFor[T any]() Type {
 	return toRType(abi.TypeFor[T]())
 }
 
+// IsEnumVariant reports whether t is a concrete enum variant type.
+func IsEnumVariant(t Type) bool {
+	return t != nil && t.common().TFlag&abi.TFlagEnumVariant != 0
+}
+
+// EnumVariantName returns the fully qualified name of the enum variant type t.
+// It returns an empty string if t is not an enum variant type.
+func EnumVariantName(t Type) string {
+	if !IsEnumVariant(t) {
+		return ""
+	}
+	name := t.Name()
+	typeName := t.String()
+	if suffix := "." + name; len(typeName) > len(suffix) && typeName[len(typeName)-len(suffix):] == suffix {
+		typeName = typeName[:len(typeName)-len(suffix)]
+	}
+	if i := bytealg.IndexByteString(typeName, '.'); i >= 0 {
+		typeName = typeName[i+1:]
+	}
+	if path := t.PkgPath(); path != "" {
+		return path + "." + typeName + "." + name
+	}
+	return typeName + "." + name
+}
+
+// EnumVariantByName returns the enum variant type with the fully qualified
+// name returned by [EnumVariantName]. It returns nil if no such linked type
+// exists in the program.
+func EnumVariantByName(name string) Type {
+	find := func(types []*abi.Type) Type {
+		for _, typ := range types {
+			if typ.TFlag&abi.TFlagEnumVariant == 0 {
+				continue
+			}
+			candidate := toType(typ)
+			if EnumVariantName(candidate) == name {
+				return candidate
+			}
+		}
+		return nil
+	}
+
+	first, rest := compiledTypelinks()
+	if typ := find(first); typ != nil {
+		return typ
+	}
+	for _, types := range rest {
+		if typ := find(types); typ != nil {
+			return typ
+		}
+	}
+	return nil
+}
+
 // rtypeOf directly extracts the *rtype of the provided value.
 func rtypeOf(i any) *abi.Type {
 	return abi.TypeOf(i)
@@ -1493,6 +1548,9 @@ func implements(T, V *abi.Type) bool {
 	if len(t.Methods) == 0 {
 		return true
 	}
+	if isEnumInterface(t) && V.Kind() != abi.Interface && V.TFlag&abi.TFlagEnumVariant == 0 {
+		return false
+	}
 
 	// The same algorithm applies in both cases, but the
 	// method tables for an interface type and a concrete type
@@ -1564,6 +1622,16 @@ func implements(T, V *abi.Type) bool {
 			if i++; i >= len(t.Methods) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func isEnumInterface(t *interfaceType) bool {
+	for i := range t.Methods {
+		name := t.nameOff(t.Methods[i].Name).Name()
+		if len(name) > len(".enum.") && name[:len(".enum.")] == ".enum." {
+			return true
 		}
 	}
 	return false
