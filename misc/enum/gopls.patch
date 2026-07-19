@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..5dc5279
 --- /dev/null
 +++ b/internal/analysis/fillswitch/enum_test.go
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,188 @@
 +// Copyright 2026 The Go Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style
 +// license that can be found in the LICENSE file.
@@ -90,6 +90,50 @@ index 0000000..5dc5279
 +	emptyText := string(emptyFix.TextEdits[0].NewText)
 +	if !strings.Contains(emptyText, "case nil:") || strings.Contains(emptyText, "case None:") {
 +		t.Fatalf("empty enum switch edit = %q", emptyText)
++	}
++}
++
++func TestEnumTypeSwitchCoveringCases(t *testing.T) {
++	const src = `package p
++
++type Result enum { Ok; Err }
++
++func enumCase(result Result) {
++	switch result.(type) {
++	case Result:
++	}
++}
++
++func anyCase(result Result) {
++	switch result.(type) {
++	case any:
++	}
++}
++`
++	fset := token.NewFileSet()
++	file, err := parser.ParseFile(fset, "enum.go", src, 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	info := &types.Info{
++		Types:      make(map[ast.Expr]types.TypeAndValue),
++		Defs:       make(map[*ast.Ident]types.Object),
++		Uses:       make(map[*ast.Ident]types.Object),
++		Implicits:  make(map[ast.Node]types.Object),
++		Scopes:     make(map[ast.Node]*types.Scope),
++		Selections: make(map[*ast.SelectorExpr]*types.Selection),
++	}
++	config := &types.Config{Error: func(error) {}}
++	pkg, _ := config.Check("p", fset, []*ast.File{file}, info)
++	diagnostics := fillswitch.Diagnose(file, token.NoPos, token.NoPos, pkg, info)
++	if len(diagnostics) != 2 {
++		t.Fatalf("got %d diagnostics, want 2", len(diagnostics))
++	}
++	for _, diagnostic := range diagnostics {
++		text := string(diagnostic.SuggestedFixes[0].TextEdits[0].NewText)
++		if !strings.Contains(text, "case nil:") || strings.Contains(text, "case Ok:") || strings.Contains(text, "case Err:") {
++			t.Fatalf("covering type-switch edit = %q, want only nil", text)
++		}
 +	}
 +}
 +
@@ -180,7 +224,7 @@ index 7b1a7e8..301464e 100644
 +		case *ast.ExprStmt:
 +			tag = assign.X.(*ast.TypeAssertExpr).X
 +		}
-+		return suggestedFixEnumSwitch(stmt.End(), stmt.Body, tag, namedType, pkg, info)
++		return suggestedFixEnumSwitch(stmt.End(), stmt.Body, tag, namedType, true, pkg, info)
 +	}
 +	if hasDefaultCase(stmt.Body) {
 +		return nil
@@ -201,7 +245,7 @@ index 7b1a7e8..301464e 100644
  		return nil
  	}
 +	if enumType := namedType.EnumType(); enumType != nil && enumType.Origin() == namedType.Origin() {
-+		return suggestedFixEnumSwitch(stmt.End(), stmt.Body, stmt.Tag, namedType, pkg, info)
++		return suggestedFixEnumSwitch(stmt.End(), stmt.Body, stmt.Tag, namedType, false, pkg, info)
 +	}
 +	if hasDefaultCase(stmt.Body) {
 +		return nil
@@ -213,7 +257,7 @@ index 7b1a7e8..301464e 100644
  	}
  }
  
-+func suggestedFixEnumSwitch(end token.Pos, body *ast.BlockStmt, tag ast.Expr, namedType *types.Named, pkg *types.Package, info *types.Info) *analysis.SuggestedFix {
++func suggestedFixEnumSwitch(end token.Pos, body *ast.BlockStmt, tag ast.Expr, namedType *types.Named, typeSwitch bool, pkg *types.Package, info *types.Info) *analysis.SuggestedFix {
 +	variants := namedType.EnumVariants()
 +
 +	var existing []types.Type
@@ -239,7 +283,7 @@ index 7b1a7e8..301464e 100644
 +
 +	covered := func(variant types.Type) bool {
 +		for _, typ := range existing {
-+			if types.Identical(typ, variant) {
++			if types.Identical(typ, variant) || typeSwitch && types.AssignableTo(variant, typ) {
 +				return true
 +			}
 +		}
