@@ -103,7 +103,6 @@ const (
 	DEFAULT
 	DEFER
 	ELSE
-	ENUM
 	FALLTHROUGH
 	FOR
 
@@ -129,6 +128,7 @@ const (
 	additional_beg
 	// additional tokens, handled in an ad-hoc manner
 	TILDE
+	ENUM // contextual keyword
 	additional_end
 )
 
@@ -210,7 +210,6 @@ var tokens = [...]string{
 	DEFAULT:     "default",
 	DEFER:       "defer",
 	ELSE:        "else",
-	ENUM:        "enum",
 	FALLTHROUGH: "fallthrough",
 	FOR:         "for",
 
@@ -233,6 +232,7 @@ var tokens = [...]string{
 	VAR:    "var",
 
 	TILDE: "~",
+	ENUM:  "enum",
 }
 
 // String returns the string corresponding to the token tok.
@@ -286,9 +286,6 @@ var keywords map[string]Token
 func init() {
 	keywords = make(map[string]Token, keyword_end-(keyword_beg+1))
 	for i := keyword_beg + 1; i < keyword_end; i++ {
-		if i == ENUM {
-			continue // enum is a contextual keyword
-		}
 		keywords[tokens[i]] = i
 	}
 }

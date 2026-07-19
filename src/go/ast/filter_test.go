@@ -123,4 +123,28 @@ type Result enum {
 	if len(decl.Variants) != 1 || len(decl.Variants[0].Fields.List) != 1 {
 		t.Fatalf("filtered enum = %#v", decl)
 	}
+
+	file, err = parser.ParseFile(fset, "enum3.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ast.FilterFile(file, func(name string) bool { return name == "Result" }) {
+		t.Fatal("FilterFile removed matching enum")
+	}
+	decl = file.Decls[0].(*ast.EnumDecl)
+	if len(decl.Variants) != 0 {
+		t.Fatalf("variants matching only enum name = %#v, want none", decl.Variants)
+	}
+
+	file, err = parser.ParseFile(fset, "enum4.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ast.FilterFile(file, func(name string) bool { return name == "Ok" }) {
+		t.Fatal("FilterFile removed matching enum variant")
+	}
+	decl = file.Decls[0].(*ast.EnumDecl)
+	if len(decl.Variants) != 1 || len(decl.Variants[0].Fields.List) != 0 {
+		t.Fatalf("fields matching only variant name = %#v, want none", decl.Variants)
+	}
 }

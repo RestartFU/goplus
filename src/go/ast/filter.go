@@ -242,9 +242,7 @@ func filterDecl(decl Decl, f Filter, export bool) bool {
 		return f(d.Name.Name)
 	case *EnumDecl:
 		if f(d.Name.Name) {
-			if export {
-				d.Variants = filterEnumVariants(d.Variants, f, export)
-			}
+			d.Variants = filterEnumVariants(d.Variants, f, export)
 			return true
 		}
 		if !export {
@@ -260,9 +258,7 @@ func filterEnumVariants(list []*EnumVariant, f Filter, export bool) []*EnumVaria
 	for _, variant := range list {
 		keep := f(variant.Name.Name)
 		if keep {
-			if export {
-				filterFieldList(variant.Fields, f, export)
-			}
+			filterFieldList(variant.Fields, f, export)
 		} else if !export && variant.Fields != nil {
 			filterFieldList(variant.Fields, f, export)
 			keep = len(variant.Fields.List) > 0
