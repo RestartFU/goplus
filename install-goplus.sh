@@ -62,8 +62,9 @@ done
 mkdir -p "$(dirname -- "$prefix")"
 prefix_parent=$(CDPATH= cd -- "$(dirname -- "$prefix")" && pwd -P)
 prefix=$prefix_parent/$(basename -- "$prefix")
+physical_home=$(CDPATH= cd -- "$HOME" && pwd -P)
 case $prefix in
-"" | / | "$HOME")
+"" | / | "$physical_home")
 	echo "refusing unsafe install prefix: $prefix" >&2
 	exit 1
 	;;
