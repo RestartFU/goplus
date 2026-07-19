@@ -6,6 +6,9 @@ on:
       - ".github/workflows/windows-installer.yml"
       - "install-goplus.ps1"
       - "misc/enum/goplus-installer/**"
+      - "misc/enum/gopls.patch"
+      - "misc/enum/x-tools.patch"
+      - "src/**"
   workflow_dispatch:
 
 permissions:

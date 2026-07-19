@@ -36,6 +36,13 @@ func loadValue[T any](value T, ok bool) (T, error) {
 	return value, nil
 }
 
+func save(ok bool) error {
+	if !ok {
+		return errLoad
+	}
+	return nil
+}
+
 func getUser(ok bool) (user, error) {
 	try loaded := load(ok)
 	return loaded, nil
@@ -49,6 +56,11 @@ func getPair(ok bool) (user, int, error) {
 func getValue[T any](value T, ok bool) (T, error) {
 	try loaded := loadValue(value, ok)
 	return loaded, nil
+}
+
+func saveUser(ok bool) error {
+	try save(ok)
+	return nil
 }
 
 func main() {
@@ -76,5 +88,12 @@ func main() {
 	value, err := getValue("generic", true)
 	if err != nil || value != "generic" {
 		panic("generic propagation")
+	}
+
+	if err := saveUser(true); err != nil {
+		panic("error-only success")
+	}
+	if err := saveUser(false); !errors.Is(err, errLoad) {
+		panic("error-only propagation")
 	}
 }

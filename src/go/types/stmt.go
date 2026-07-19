@@ -558,21 +558,29 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		}
 
 	case *ast.TryStmt:
-		hidden := &ast.Ident{NamePos: s.Try, Name: "_"}
-		lhs := append(slices.Clone(s.Lhs), hidden)
-		vars := check.shortVarDecl(inNode(s, s.TokPos), lhs, s.Rhs)
+		var resultVar *Var
+		if len(s.Lhs) == 0 {
+			top := len(check.delayed)
+			resultVar = newVar(LocalVar, s.Try, check.pkg, "", nil)
+			check.initVars([]*Var{resultVar}, s.Rhs, nil)
+			check.processDelayed(top)
+		} else {
+			hidden := &ast.Ident{NamePos: s.Try, Name: "_"}
+			lhs := append(slices.Clone(s.Lhs), hidden)
+			vars := check.shortVarDecl(inNode(s, s.TokPos), lhs, s.Rhs)
+			if len(vars) == len(lhs) {
+				resultVar = vars[len(vars)-1]
+			}
+		}
 
 		propagatesBool := false
-		if len(vars) == len(lhs) {
-			resultVar := vars[len(vars)-1]
-			if resultVar.typ != nil {
-				switch {
-				case Identical(resultVar.typ, universeError):
-				case Identical(resultVar.typ, universeBool):
-					propagatesBool = true
-				default:
-					check.errorf(s, IncompatibleAssign, "final try result must have type error or bool, have %s", resultVar.typ)
-				}
+		if resultVar != nil && resultVar.typ != nil {
+			switch {
+			case Identical(resultVar.typ, universeError):
+			case Identical(resultVar.typ, universeBool):
+				propagatesBool = true
+			default:
+				check.errorf(s, IncompatibleAssign, "final try result must have type error or bool, have %s", resultVar.typ)
 			}
 		}
 

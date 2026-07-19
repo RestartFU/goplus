@@ -89,7 +89,11 @@ func StartPos(n Node) Pos {
 		case *AssignStmt:
 			m = n.Lhs
 		case *TryStmt:
-			m = n.Lhs
+			if n.Lhs != nil {
+				m = n.Lhs
+				continue
+			}
+			return n.Pos()
 		// case *BranchStmt:
 		// case *CallStmt:
 		// case *ReturnStmt:

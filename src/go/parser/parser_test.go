@@ -1149,6 +1149,28 @@ func get() (string, int, error) {
 	}
 }
 
+func TestParseErrorOnlyTryStmt(t *testing.T) {
+	const src = `package p
+func save() error { return nil }
+func run() error {
+	try save()
+	return nil
+}
+`
+	f, err := ParseFile(token.NewFileSet(), "try.go", src, DeclarationErrors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := f.Decls[1].(*ast.FuncDecl)
+	stmt, ok := fn.Body.List[0].(*ast.TryStmt)
+	if !ok {
+		t.Fatalf("statement has type %T, want *ast.TryStmt", fn.Body.List[0])
+	}
+	if len(stmt.Lhs) != 0 || len(stmt.Rhs) != 1 {
+		t.Fatalf("try shape is %d lhs and %d rhs, want 0 and 1", len(stmt.Lhs), len(stmt.Rhs))
+	}
+}
+
 func TestTryIsContextualKeyword(t *testing.T) {
 	tests := []string{
 		"try := 1",

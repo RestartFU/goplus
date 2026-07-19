@@ -319,7 +319,7 @@ index 242074925..98c9c6d74 100644
 +		// The propagated result has no source-level binding. Build the success
 +		// assignments so analyses retain definitions and data flow; control-flow
 +		// propagation is represented by the compiler lowering.
-+		b.assignStmt(fn, s.Lhs, s.Rhs, true)
++		if len(s.Lhs) > 0 { b.assignStmt(fn, s.Lhs, s.Rhs, true) } else { b.expr(fn, s.Rhs[0]) }
 +
  	case *ast.GoStmt:
  		// The "intrinsics" new/make/len/cap are forbidden here.
@@ -386,7 +386,7 @@ index 2c4d2c4e5..c74814b43 100644
  
 +	case *ast.TryStmt:
 +		walkSlice(v, n.Rhs)
-+		v.shortVarDecl(n.Lhs)
++		if len(n.Lhs) > 0 { v.shortVarDecl(n.Lhs) }
 +
  	case *ast.LabeledStmt:
  		// Ignore labels.

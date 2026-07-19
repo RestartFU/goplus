@@ -416,7 +416,8 @@ type (
 		simpleStmt
 	}
 
-	// TryStmt binds every result except the final error or boolean result.
+	// TryStmt propagates a final error or boolean result. Lhs is nil for an
+	// error-only expression and otherwise binds every preceding result.
 	// Result is a compiler-generated name used to lower propagation after type
 	// checking.
 	TryStmt struct {

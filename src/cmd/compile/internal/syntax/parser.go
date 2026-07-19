@@ -2771,27 +2771,27 @@ func (p *parser) stmtOrNil() Stmt {
 }
 
 func (p *parser) tryStmt(pos Pos) Stmt {
-	var lhs []Expr
-	for {
-		lhs = append(lhs, p.name())
-		if !p.got(_Comma) {
-			break
-		}
-	}
-	p.want(_Define)
-
-	left := lhs[0]
-	if len(lhs) > 1 {
-		list := new(ListExpr)
-		list.pos = lhs[0].Pos()
-		list.ElemList = lhs
-		left = list
-	}
-
+	first := p.name()
 	s := new(TryStmt)
 	s.pos = pos
-	s.Lhs = left
-	s.Rhs = p.exprList()
+	if p.tok != _Comma && p.tok != _Define {
+		s.Rhs = p.binaryExpr(p.pexpr(first, false), 0)
+	} else {
+		lhs := []Expr{first}
+		for p.got(_Comma) {
+			lhs = append(lhs, p.name())
+		}
+		p.want(_Define)
+
+		s.Lhs = lhs[0]
+		if len(lhs) > 1 {
+			list := new(ListExpr)
+			list.pos = lhs[0].Pos()
+			list.ElemList = lhs
+			s.Lhs = list
+		}
+		s.Rhs = p.exprList()
+	}
 	resultName := fmt.Sprintf(".try%d", p.tryCount)
 	s.Result = NewName(pos, resultName)
 	s.ResultUse = NewName(pos, resultName)

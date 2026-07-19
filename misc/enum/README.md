@@ -104,6 +104,15 @@ func displayName(values map[string]User, name string) (string, bool) {
 ```
 
 Multiple success values may be bound with `try value, count := load()`.
+Calls that return only an error need no artificial binding:
+
+```go
+func saveUser(user User) error {
+	try save(user)
+	return nil
+}
+```
+
 Because `try` is contextual, ordinary uses such as `try := 1` remain valid.
 
 They were verified with x/tools commit `635ae9663724` and gopls v0.22.0:

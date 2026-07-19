@@ -681,7 +681,8 @@ type (
 		Rhs    []Expr
 	}
 
-	// A TryStmt node represents a propagating short variable declaration.
+	// A TryStmt node represents propagation of a final error or boolean result.
+	// Lhs and TokPos are empty when no preceding results are bound.
 	TryStmt struct {
 		Try    token.Pos // position of "try"
 		Lhs    []Expr

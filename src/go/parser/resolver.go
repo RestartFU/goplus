@@ -319,7 +319,9 @@ func (r *resolver) Visit(node ast.Node) ast.Visitor {
 
 	case *ast.TryStmt:
 		r.walkExprs(n.Rhs)
-		r.shortVarDecl(&ast.AssignStmt{Lhs: n.Lhs, TokPos: n.TokPos, Tok: token.DEFINE, Rhs: n.Rhs})
+		if len(n.Lhs) > 0 {
+			r.shortVarDecl(&ast.AssignStmt{Lhs: n.Lhs, TokPos: n.TokPos, Tok: token.DEFINE, Rhs: n.Rhs})
+		}
 
 	case *ast.BranchStmt:
 		// add to list of unresolved targets

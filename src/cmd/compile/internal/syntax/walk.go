@@ -254,7 +254,9 @@ func (w walker) node(n Node) {
 		}
 
 	case *TryStmt:
-		w.node(n.Lhs)
+		if n.Lhs != nil {
+			w.node(n.Lhs)
+		}
 		w.node(n.Rhs)
 
 	case *BranchStmt:

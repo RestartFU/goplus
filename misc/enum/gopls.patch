@@ -362,7 +362,7 @@ index 450fcc0a2..b37933afa 100644
  
 +	case *ast.TryStmt:
 +		r.walkExprs(n.Rhs)
-+		r.shortVarDecl(&ast.AssignStmt{Lhs: n.Lhs, TokPos: n.TokPos, Tok: token.DEFINE, Rhs: n.Rhs})
++		if len(n.Lhs) > 0 { r.shortVarDecl(&ast.AssignStmt{Lhs: n.Lhs, TokPos: n.TokPos, Tok: token.DEFINE, Rhs: n.Rhs}) }
 +
  	case *ast.BranchStmt:
  		// add to list of unresolved targets
@@ -671,7 +671,7 @@ index 084eafe0f..f63a9f1bd 100644
  				// apparent selector spans lines.
  				stmtOK = safetoken.Line(tokFile, c.pos) < safetoken.Line(tokFile, p.TokPos)
 +			case *ast.TryStmt:
-+				stmtOK = safetoken.Line(tokFile, c.pos) < safetoken.Line(tokFile, p.TokPos)
++				stmtOK = p.TokPos.IsValid() && safetoken.Line(tokFile, c.pos) < safetoken.Line(tokFile, p.TokPos)
  			}
  			break
  		}
@@ -1156,7 +1156,7 @@ index 4d0a835ca..7d386c20f 100644
  		tv.token(n.TokPos, len(n.Tok.String()), semtok.TokOperator)
 +	case *ast.TryStmt:
 +		tv.token(n.Try, len("try"), semtok.TokKeyword)
-+		tv.token(n.TokPos, len(":="), semtok.TokOperator)
++		if n.TokPos.IsValid() { tv.token(n.TokPos, len(":="), semtok.TokOperator) }
  	case *ast.BasicLit:
  		if n.Kind == token.STRING {
  			if strings.Contains(n.Value, "\n") {

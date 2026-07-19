@@ -227,7 +227,9 @@ func (check *Checker) blockBranches(all *Scope, parent *block, lstmt *syntax.Lab
 			}
 
 		case *syntax.TryStmt:
-			recordVarDecl(s.Pos())
+			if s.Lhs != nil {
+				recordVarDecl(s.Pos())
+			}
 
 		case *syntax.BlockStmt:
 			// Unresolved forward jumps inside the nested block

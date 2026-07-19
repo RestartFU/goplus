@@ -12,9 +12,16 @@ func loadString() (int, string) { return 0, "" }
 
 func loadBool() (int, bool) { return 0, false }
 
+func loadValueOnly() int { return 0 }
+
 func wrongTryResult() (int, error) {
 	try value := loadString() // ERROR "final try result must have type error"
 	return value, nil
+}
+
+func wrongErrorOnlyTryResult() error {
+	try loadValueOnly() // ERROR "final try result must have type error"
+	return nil
 }
 
 func wrongFunctionResult() int {

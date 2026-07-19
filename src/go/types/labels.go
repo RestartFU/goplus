@@ -232,7 +232,9 @@ func (check *Checker) blockBranches(all *Scope, parent *block, lstmt *ast.Labele
 			}
 
 		case *ast.TryStmt:
-			recordVarDecl(s.Pos())
+			if len(s.Lhs) > 0 {
+				recordVarDecl(s.Pos())
+			}
 
 		case *ast.BlockStmt:
 			blockBranches(lstmt, s.List)

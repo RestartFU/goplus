@@ -1426,11 +1426,15 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 	case *ast.TryStmt:
 		p.setPos(s.Try)
 		p.print("try", blank)
-		p.exprList(s.Try, s.Lhs, 1, 0, s.TokPos, false)
-		p.print(blank)
-		p.setPos(s.TokPos)
-		p.print(token.DEFINE, blank)
-		p.exprList(s.TokPos, s.Rhs, 1, 0, token.NoPos, false)
+		if len(s.Lhs) == 0 {
+			p.exprList(s.Try, s.Rhs, 1, 0, token.NoPos, false)
+		} else {
+			p.exprList(s.Try, s.Lhs, 1, 0, s.TokPos, false)
+			p.print(blank)
+			p.setPos(s.TokPos)
+			p.print(token.DEFINE, blank)
+			p.exprList(s.TokPos, s.Rhs, 1, 0, token.NoPos, false)
+		}
 
 	case *ast.GoStmt:
 		p.print(token.GO, blank)

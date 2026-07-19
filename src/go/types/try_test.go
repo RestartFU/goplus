@@ -24,6 +24,11 @@ func TestTryStmt(t *testing.T) {
 func get() (int, error) { try value := load(); return value, nil }`,
 		},
 		{
+			name: "valid error only",
+			body: `func save() error { return nil }
+func run() error { try save(); return nil }`,
+		},
+		{
 			name: "valid bool",
 			body: `func load() (int, bool) { return 0, false }
 func get() (int, bool) { try value := load(); return value, true }`,
@@ -39,6 +44,12 @@ func get() (int, bool) { try value := load(); return value, true }`,
 			name: "final result is not error",
 			body: `func load() (int, string) { return 0, "" }
 func get() (int, error) { try value := load(); return value, nil }`,
+			want: "final try result must have type error",
+		},
+		{
+			name: "error only result is not error",
+			body: `func load() int { return 0 }
+func run() error { try load(); return nil }`,
 			want: "final try result must have type error",
 		},
 		{

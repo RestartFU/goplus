@@ -534,15 +534,17 @@ func (check *Checker) stmt(ctxt stmtContext, s syntax.Stmt) {
 
 	case *syntax.TryStmt:
 		userLhs := syntax.UnpackListExpr(s.Lhs)
-		hasNew := false
-		for _, expr := range userLhs {
-			if name, _ := expr.(*syntax.Name); name != nil && name.Value != "_" && check.scope.Lookup(name.Value) == nil {
-				hasNew = true
-				break
+		if len(userLhs) > 0 {
+			hasNew := false
+			for _, expr := range userLhs {
+				if name, _ := expr.(*syntax.Name); name != nil && name.Value != "_" && check.scope.Lookup(name.Value) == nil {
+					hasNew = true
+					break
+				}
 			}
-		}
-		if !hasNew {
-			check.softErrorf(s, NoNewVar, "no new variables on left side of :=")
+			if !hasNew {
+				check.softErrorf(s, NoNewVar, "no new variables on left side of :=")
+			}
 		}
 
 		lhs := append(userLhs, s.Result)
