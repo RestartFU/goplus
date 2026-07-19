@@ -296,6 +296,11 @@ func (ls *labelScope) blockBranches(parent *block, ctxt targets, lstmt *LabeledS
 				recordVarDecl(s.Pos(), s.Lhs)
 			}
 
+		case *TryStmt:
+			if s.Lhs != nil {
+				recordVarDecl(s.Pos(), s.Lhs)
+			}
+
 		case *BlockStmt:
 			inner := targets{ctxt.breaks, ctxt.continues, -1}
 			innerBlock(inner, s.Pos(), s.List)

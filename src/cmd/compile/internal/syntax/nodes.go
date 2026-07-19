@@ -416,6 +416,17 @@ type (
 		simpleStmt
 	}
 
+	// TryStmt propagates a final error or boolean result. Lhs is nil for an
+	// error-only expression and otherwise binds every preceding result.
+	// Result is a compiler-generated name used to lower propagation after type
+	// checking.
+	TryStmt struct {
+		Lhs, Rhs  Expr
+		Result    *Name // definition used by the lowered assignment
+		ResultUse *Name // use in the lowered failure check and return
+		stmt
+	}
+
 	BranchStmt struct {
 		Tok   token // Break, Continue, Fallthrough, or Goto
 		Label *Name

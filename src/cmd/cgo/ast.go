@@ -352,7 +352,7 @@ const (
 // walk walks the AST x, calling visit(f, x, context) for each node.
 func (f *File) walk(x any, context astContext, visit func(*File, any, astContext)) {
 	visit(f, x, context)
-	if f.walkEnum(x, visit) {
+	if f.walkExtensions(x, visit) {
 		return
 	}
 	switch n := x.(type) {

@@ -33,3 +33,26 @@ type Result[T any] enum {
 		t.Fatalf("walk visited %d variants, want 2", variants)
 	}
 }
+
+func TestWalkTry(t *testing.T) {
+	const src = `package p
+func load() (int, error) { return 0, nil }
+func get() (int, error) {
+	try value := load()
+	return value, nil
+}
+`
+	file, err := parser.ParseFile(token.NewFileSet(), "try.go", src, parser.SkipObjectResolution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tries int
+	new(File).walk(file, ctxProg, func(_ *File, x any, _ astContext) {
+		if _, ok := x.(*ast.TryStmt); ok {
+			tries++
+		}
+	})
+	if tries != 1 {
+		t.Fatalf("walk visited %d try statements, want 1", tries)
+	}
+}

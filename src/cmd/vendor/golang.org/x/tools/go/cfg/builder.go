@@ -33,7 +33,8 @@ start:
 		*ast.IncDecStmt,
 		*ast.GoStmt,
 		*ast.EmptyStmt,
-		*ast.AssignStmt:
+		*ast.AssignStmt,
+		*ast.TryStmt:
 		// No effect on control flow.
 		b.add(s)
 

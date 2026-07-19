@@ -557,6 +557,42 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			check.assignVar(s.Lhs[0], nil, &x, "assignment")
 		}
 
+	case *ast.TryStmt:
+		var resultVar *Var
+		if len(s.Lhs) == 0 {
+			top := len(check.delayed)
+			resultVar = newVar(LocalVar, s.Try, check.pkg, "", nil)
+			check.initVars([]*Var{resultVar}, s.Rhs, nil)
+			check.processDelayed(top)
+		} else {
+			hidden := &ast.Ident{NamePos: s.Try, Name: "_"}
+			lhs := append(slices.Clone(s.Lhs), hidden)
+			vars := check.shortVarDecl(inNode(s, s.TokPos), lhs, s.Rhs)
+			if len(vars) == len(lhs) {
+				resultVar = vars[len(vars)-1]
+			}
+		}
+
+		propagatesBool := false
+		if resultVar != nil && resultVar.typ != nil {
+			switch {
+			case Identical(resultVar.typ, universeError):
+			case Identical(resultVar.typ, universeBool):
+				propagatesBool = true
+			default:
+				check.errorf(s, IncompatibleAssign, "final try result must have type error or bool, have %s", resultVar.typ)
+			}
+		}
+
+		results := check.sig.results
+		if propagatesBool {
+			if results.Len() == 0 || !Identical(results.At(results.Len()-1).Type(), universeBool) {
+				check.error(s, WrongResultCount, "try requires the enclosing function to return bool as its final result")
+			}
+		} else if results.Len() == 0 || !Identical(results.At(results.Len()-1).Type(), universeError) {
+			check.error(s, WrongResultCount, "try requires the enclosing function to return error as its final result")
+		}
+
 	case *ast.GoStmt:
 		check.suspendedCall("go", s.Call)
 

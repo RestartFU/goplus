@@ -221,6 +221,11 @@ func childrenOf(n ast.Node) []ast.Node {
 		children = append(children,
 			tok(n.TokPos, len(n.Tok.String())))
 
+	case *ast.TryStmt:
+		children = append(children,
+			tok(n.Try, len("try")),
+			tok(n.TokPos, len(":=")))
+
 	case *ast.BasicLit:
 		children = append(children,
 			tok(n.ValuePos, len(n.Value)))
@@ -514,6 +519,8 @@ func NodeDescription(n ast.Node) string {
 		return "array type"
 	case *ast.AssignStmt:
 		return "assignment"
+	case *ast.TryStmt:
+		return "try statement"
 	case *ast.BadDecl:
 		return "bad declaration"
 	case *ast.BadExpr:

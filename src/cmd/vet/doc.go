@@ -82,5 +82,5 @@ Core flags:
 */
 package main
 
-// Keep the x/tools packages vendored by cmd aware of first-class enums.
+// Keep the x/tools packages vendored by cmd aware of Go+ syntax.
 //go:generate go run cmd/internal/toolsvendor -vendor ../vendor

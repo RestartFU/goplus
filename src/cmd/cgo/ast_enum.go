@@ -8,8 +8,8 @@ package main
 
 import "go/ast"
 
-// walkEnum handles AST nodes unavailable in the bootstrap toolchain.
-func (f *File) walkEnum(x any, visit func(*File, any, astContext)) bool {
+// walkExtensions handles Go+ AST nodes unavailable in the bootstrap toolchain.
+func (f *File) walkExtensions(x any, visit func(*File, any, astContext)) bool {
 	switch node := x.(type) {
 	case *ast.EnumVariant:
 		if node.Fields != nil {
@@ -23,6 +23,10 @@ func (f *File) walkEnum(x any, visit func(*File, any, astContext)) bool {
 		for _, variant := range node.Variants {
 			f.walk(variant, ctxDecl, visit)
 		}
+		return true
+	case *ast.TryStmt:
+		f.walk(node.Lhs, ctxExpr, visit)
+		f.walk(node.Rhs, ctxExpr, visit)
 		return true
 	}
 	return false
