@@ -772,6 +772,14 @@ diff --git a/internal/golang/rename.go b/internal/golang/rename.go
 index 9e04f8d..2dbcb9f 100644
 --- a/internal/golang/rename.go
 +++ b/internal/golang/rename.go
+@@ -89,6 +89,7 @@ type renamer struct {
+ 	objsToUpdate       map[types.Object]bool // records progress of calls to check
+ 	conflicts          []string
+ 	from, to           string
++	toLookup           string
+ 	satisfyConstraints map[satisfy.Constraint]bool
+ 	msets              typeutil.MethodSetCache
+ 	changeMethods      bool
 @@ -180,7 +180,7 @@ func PrepareRename(ctx context.Context, snapshot *cache.Snapshot, f file.Handle,
  	}
  	return &PrepareItem{
@@ -810,7 +818,7 @@ index 9e04f8d..2dbcb9f 100644
  	// Find objectpath, if object is exported ("" otherwise).
  	var declObjPath objectpath.Path
  	if obj.Exported() {
-@@ -771,6 +784,30 @@ func renameOrdinary(ctx context.Context, snapshot *cache.Snapshot, uri protocol.
+@@ -771,6 +785,43 @@ func renameOrdinary(ctx context.Context, snapshot *cache.Snapshot, uri protocol.
  	return renameExported(pkgs, declPkgPath, declObjPath, newName)
  }
  
@@ -827,6 +835,19 @@ index 9e04f8d..2dbcb9f 100644
 +		if obj == nil {
 +			continue
 +		}
++		enumName, _, ok := strings.Cut(qualifiedName, ".")
++		if !ok {
++			return nil, bug.Errorf("invalid qualified enum variant name %q", qualifiedName)
++		}
++		if enumObj, ok := declPkg.Scope().Lookup(enumName).(*types.TypeName); ok {
++			if named, ok := types.Unalias(enumObj.Type()).(*types.Named); ok {
++				for method := range named.Methods() {
++					if method.Name() == newName {
++						return nil, fmt.Errorf("renaming enum variant %q to %q would conflict with method %s.%s", sourceName(obj), newName, enumName, newName)
++					}
++				}
++			}
++		}
 +		editMap, _, err := renameObjects(newName, pkg, obj)
 +		if err != nil {
 +			return nil, err
@@ -841,16 +862,25 @@ index 9e04f8d..2dbcb9f 100644
  // renameReceivers renames all receivers of methods of the same named
  // type as recv. The edits of each successful renaming are added to
  // editMap; the failed ones are quietly discarded.
-@@ -1337,7 +1374,7 @@ func renameObjects(newName string, pkg *cache.Package, targets ...types.Object)
+@@ -1334,11 +1385,16 @@ func renameImports(ctx context.Context, snapshot *cache.Snapshot, mp *metadata.P
+ //
+ // It returns an error if the renaming would cause a conflict.
+ func renameObjects(newName string, pkg *cache.Package, targets ...types.Object) (map[protocol.DocumentURI][]diff.Edit, map[types.Object]bool, error) {
++	toLookup := newName
++	if source := sourceName(targets[0]); source != targets[0].Name() {
++		toLookup = strings.TrimSuffix(targets[0].Name(), source) + newName
++	}
  	r := renamer{
  		pkg:          pkg,
  		objsToUpdate: make(map[types.Object]bool),
 -		from:         targets[0].Name(),
 +		from:         sourceName(targets[0]),
  		to:           newName,
++		toLookup:     toLookup,
  	}
  
-@@ -1689,6 +1726,13 @@ func (r *docLinkRenamer) update(pgf *parsego.File) (result []diff.Edit, err erro
+ 	// A renaming initiated at an interface method indicates the
+@@ -1689,6 +1745,13 @@ func (r *docLinkRenamer) update(pgf *parsego.File) (result []diff.Edit, err erro
  			doc = decl.Doc
  		case *ast.FuncDecl:
  			doc = decl.Doc
@@ -864,7 +894,7 @@ index 9e04f8d..2dbcb9f 100644
  		}
  		err = updateDocLinks(doc)
  		if err != nil {
-@@ -1708,6 +1752,13 @@ func docComment(pgf *parsego.File, curId inspector.Cursor) *ast.CommentGroup {
+@@ -1708,6 +1771,13 @@ func docComment(pgf *parsego.File, curId inspector.Cursor) *ast.CommentGroup {
  			return decl.Doc
  		case *ast.Field:
  			return decl.Doc
@@ -878,6 +908,46 @@ index 9e04f8d..2dbcb9f 100644
  		case *ast.GenDecl:
  			return decl.Doc
  		// For {Type,Value}Spec, if the doc on the spec is absent,
+diff --git a/internal/golang/rename_check.go b/internal/golang/rename_check.go
+index 3c67d54..8c972df 100644
+--- a/internal/golang/rename_check.go
++++ b/internal/golang/rename_check.go
+@@ -130,7 +130,7 @@ func (r *renamer) checkInFileBlock(from *types.PkgName) {
+ 	}
+ 
+ 	// Check for conflicts between file and package block.
+-	if prev := from.Pkg().Scope().Lookup(r.to); prev != nil {
++	if prev := from.Pkg().Scope().Lookup(r.toLookup); prev != nil {
+ 		r.errorf(from.Pos(), "renaming this %s %q to %q would conflict",
+ 			objectKind(from), from.Name(), r.to)
+ 		r.errorf(prev.Pos(), "\twith this package member %s",
+@@ -181,7 +181,7 @@ func (r *renamer) checkInPackageBlock(from types.Object) {
+ 			if fileScope == nil {
+ 				continue // type error? (golang/go#40835)
+ 			}
+-			b, prev := fileScope.LookupParent(r.to, token.NoPos)
++			b, prev := fileScope.LookupParent(r.toLookup, token.NoPos)
+ 			if b == fileScope {
+ 				r.errorf(from.Pos(), "renaming this %s %q to %q would conflict", objectKind(from), from.Name(), r.to)
+ 				r.errorf(prev.Pos(), "\twith this %s", objectKind(prev))
+@@ -229,7 +229,7 @@ func (r *renamer) checkInPackageBlock(from types.Object) {
+ func (r *renamer) checkInLexicalScope(from types.Object) {
+ 	b := from.Parent() // the block defining the 'from' object
+ 	if b != nil {
+-		toBlock, to := b.LookupParent(r.to, from.Parent().End())
++		toBlock, to := b.LookupParent(r.toLookup, from.Parent().End())
+ 		if toBlock == b {
+ 			// same-block conflict
+ 			r.errorf(from.Pos(), "renaming this %s %q to %q",
+@@ -264,7 +264,7 @@ func (r *renamer) checkInLexicalScope(from types.Object) {
+ 		// It may be an ancestor.
+ 		fromBlock, _ := block.LookupParent(from.Name(), id.Pos())
+ 		// See what r.to would resolve to in the same scope.
+-		toBlock, to := block.LookupParent(r.to, id.Pos())
++		toBlock, to := block.LookupParent(r.toLookup, id.Pos())
+ 		if to != nil {
+ 			// sub-block conflict
+ 			if deeper(toBlock, fromBlock) {
 diff --git a/internal/golang/semtok.go b/internal/golang/semtok.go
 index 4d0a835..8d27607 100644
 --- a/internal/golang/semtok.go
@@ -1122,7 +1192,7 @@ diff --git a/internal/test/integration/misc/hover_test.go b/internal/test/integr
 index b2e9af7..d21b535 100644
 --- a/internal/test/integration/misc/hover_test.go
 +++ b/internal/test/integration/misc/hover_test.go
-@@ -424,6 +424,99 @@ func Hello() string {
+@@ -424,6 +424,106 @@ func Hello() string {
  	})
  }
  
@@ -1147,6 +1217,8 @@ index b2e9af7..d21b535 100644
 +	// Same variant documentation.
 +	Same
 +}
++
++var Success int
 +
 +func (result Result) Or(fallback int) int {
 +	switch result {
@@ -1204,6 +1276,11 @@ index b2e9af7..d21b535 100644
 +		decl := env.RegexpSearch("enum.go", `\t(Ok) \{`)
 +		if diff := cmp.Diff(decl, env.FirstDefinition(use)); diff != "" {
 +			t.Errorf("Ok definition mismatch (-want +got):\n%s", diff)
++		}
++		for _, conflict := range []string{"Err", "Or"} {
++			if err := env.Editor.Rename(env.Ctx, use, conflict); err == nil {
++				t.Errorf("renaming Ok to conflicting name %q succeeded", conflict)
++			}
 +		}
 +
 +		env.Rename(use, "Success")
