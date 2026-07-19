@@ -1160,11 +1160,12 @@ index 4d0a835ca..7d386c20f 100644
  	case *ast.BasicLit:
  		if n.Kind == token.STRING {
  			if strings.Contains(n.Value, "\n") {
-@@ -432,6 +435,9 @@ func (tv *tokenVisitor) inspect(n ast.Node) (descend bool) {
+@@ -432,6 +435,10 @@ func (tv *tokenVisitor) inspect(n ast.Node) (descend bool) {
  	case *ast.Ellipsis:
  		tv.token(n.Ellipsis, len("..."), semtok.TokOperator)
  	case *ast.EmptyStmt:
 +	case *ast.EnumDecl:
++		tv.token(n.Type, len("type"), semtok.TokKeyword)
 +		tv.token(n.Enum, len("enum"), semtok.TokKeyword)
 +	case *ast.EnumVariant:
  	case *ast.ExprStmt:
