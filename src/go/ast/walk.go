@@ -193,6 +193,10 @@ func Walk(v Visitor, node Node) {
 		walkList(v, n.Lhs)
 		walkList(v, n.Rhs)
 
+	case *TryStmt:
+		walkList(v, n.Lhs)
+		walkList(v, n.Rhs)
+
 	case *GoStmt:
 		Walk(v, n.Call)
 

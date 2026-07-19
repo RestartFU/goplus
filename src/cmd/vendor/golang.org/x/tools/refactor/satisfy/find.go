@@ -122,7 +122,8 @@ var (
 
 // exprN visits an expression in a multi-value context.
 func (f *Finder) exprN(e ast.Expr) types.Type {
-	typ := f.info.Types[e].Type.(*types.Tuple)
+	typ := f.info.Types[e].Type
+	tuple, _ := typ.(*types.Tuple)
 	switch e := e.(type) {
 	case *ast.ParenExpr:
 		return f.exprN(e.X)
@@ -139,7 +140,11 @@ func (f *Finder) exprN(e ast.Expr) types.Type {
 
 	case *ast.TypeAssertExpr:
 		// y, ok := x.(T)
-		f.typeAssert(f.expr(e.X), typ.At(0).Type())
+		if tuple != nil {
+			f.typeAssert(f.expr(e.X), tuple.At(0).Type())
+		} else {
+			f.typeAssert(f.expr(e.X), typ)
+		}
 
 	case *ast.UnaryExpr: // must be receive <-
 		// y, ok := <-x
@@ -564,6 +569,34 @@ func (f *Finder) stmt(s ast.Stmt) {
 			// y op= x
 			f.expr(s.Lhs[0])
 			f.expr(s.Rhs[0])
+		}
+
+	case *ast.TryStmt:
+		var rhsTuple types.Type
+		if len(s.Rhs) == 1 {
+			rhsTuple = f.exprN(s.Rhs[0])
+		}
+		for i, expr := range s.Lhs {
+			var lhs, rhs types.Type
+			if rhsTuple == nil {
+				rhs = f.expr(s.Rhs[i])
+			} else if _, ok := rhsTuple.(*types.Tuple); ok {
+				rhs = f.extract(rhsTuple, i)
+			} else {
+				rhs = rhsTuple
+			}
+			if id, ok := expr.(*ast.Ident); ok && id.Name != "_" {
+				if obj, ok := f.info.Defs[id]; ok {
+					lhs = obj.Type()
+				}
+			}
+			if lhs == nil {
+				lhs = f.expr(expr)
+			}
+			f.assign(lhs, rhs)
+		}
+		if rhsTuple == nil {
+			f.expr(s.Rhs[len(s.Rhs)-1])
 		}
 
 	case *ast.GoStmt:

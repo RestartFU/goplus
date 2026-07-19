@@ -169,6 +169,8 @@ const (
 	EnumVariant_Doc
 	EnumVariant_Fields
 	EnumVariant_Name
+	TryStmt_Lhs
+	TryStmt_Rhs
 
 	maxKind
 )
@@ -308,4 +310,6 @@ var fieldInfos = [...]fieldInfo{
 	EnumVariant_Doc:       info[*ast.EnumVariant]("Doc"),
 	EnumVariant_Fields:    info[*ast.EnumVariant]("Fields"),
 	EnumVariant_Name:      info[*ast.EnumVariant]("Name"),
+	TryStmt_Lhs:           info[*ast.TryStmt]("Lhs"),
+	TryStmt_Rhs:           info[*ast.TryStmt]("Rhs"),
 }

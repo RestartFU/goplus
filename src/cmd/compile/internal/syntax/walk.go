@@ -253,6 +253,12 @@ func (w walker) node(n Node) {
 			w.node(n.Rhs)
 		}
 
+	case *TryStmt:
+		if n.Lhs != nil {
+			w.node(n.Lhs)
+		}
+		w.node(n.Rhs)
+
 	case *BranchStmt:
 		if n.Label != nil {
 			w.node(n.Label)

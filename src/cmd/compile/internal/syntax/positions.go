@@ -88,6 +88,12 @@ func StartPos(n Node) Pos {
 		// case *DeclStmt:
 		case *AssignStmt:
 			m = n.Lhs
+		case *TryStmt:
+			if n.Lhs != nil {
+				m = n.Lhs
+				continue
+			}
+			return n.Pos()
 		// case *BranchStmt:
 		// case *CallStmt:
 		// case *ReturnStmt:
@@ -282,6 +288,12 @@ func EndPos(n Node) Pos {
 			}
 			return n.Pos()
 		case *AssignStmt:
+			m = n.Rhs
+			if m == nil {
+				p := EndPos(n.Lhs)
+				return MakePos(p.Base(), p.Line(), p.Col()+2)
+			}
+		case *TryStmt:
 			m = n.Rhs
 			if m == nil {
 				p := EndPos(n.Lhs)

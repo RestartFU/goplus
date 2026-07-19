@@ -681,6 +681,15 @@ type (
 		Rhs    []Expr
 	}
 
+	// A TryStmt node represents propagation of a final error or boolean result.
+	// Lhs and TokPos are empty when no preceding results are bound.
+	TryStmt struct {
+		Try    token.Pos // position of "try"
+		Lhs    []Expr
+		TokPos token.Pos // position of ":="
+		Rhs    []Expr
+	}
+
 	// A GoStmt node represents a go statement.
 	GoStmt struct {
 		Go   token.Pos // position of "go" keyword
@@ -793,6 +802,7 @@ func (s *ExprStmt) Pos() token.Pos       { return s.X.Pos() }
 func (s *SendStmt) Pos() token.Pos       { return s.Chan.Pos() }
 func (s *IncDecStmt) Pos() token.Pos     { return s.X.Pos() }
 func (s *AssignStmt) Pos() token.Pos     { return s.Lhs[0].Pos() }
+func (s *TryStmt) Pos() token.Pos        { return s.Try }
 func (s *GoStmt) Pos() token.Pos         { return s.Go }
 func (s *DeferStmt) Pos() token.Pos      { return s.Defer }
 func (s *ReturnStmt) Pos() token.Pos     { return s.Return }
@@ -822,6 +832,7 @@ func (s *IncDecStmt) End() token.Pos {
 	return s.TokPos + 2 /* len("++") */
 }
 func (s *AssignStmt) End() token.Pos { return s.Rhs[len(s.Rhs)-1].End() }
+func (s *TryStmt) End() token.Pos    { return s.Rhs[len(s.Rhs)-1].End() }
 func (s *GoStmt) End() token.Pos     { return s.Call.End() }
 func (s *DeferStmt) End() token.Pos  { return s.Call.End() }
 func (s *ReturnStmt) End() token.Pos {
@@ -879,6 +890,7 @@ func (*ExprStmt) stmtNode()       {}
 func (*SendStmt) stmtNode()       {}
 func (*IncDecStmt) stmtNode()     {}
 func (*AssignStmt) stmtNode()     {}
+func (*TryStmt) stmtNode()        {}
 func (*GoStmt) stmtNode()         {}
 func (*DeferStmt) stmtNode()      {}
 func (*ReturnStmt) stmtNode()     {}

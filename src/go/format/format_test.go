@@ -130,6 +130,26 @@ type Result[T any] enum {
 	}
 }
 
+func TestSourceTry(t *testing.T) {
+	const src = "package p\nfunc load()(int,error){return 1,nil}\nfunc get()(int,error){\ntry value:=load()\nreturn value,nil\n}\n"
+	const want = `package p
+
+func load() (int, error) { return 1, nil }
+func get() (int, error) {
+	try value := load()
+	return value, nil
+}
+`
+
+	got, err := Source([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != want {
+		t.Errorf("formatted try statement:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // Test cases that are expected to fail are marked by the prefix "ERROR".
 // The formatted result must look the same as the input for successful tests.
 var tests = []string{
