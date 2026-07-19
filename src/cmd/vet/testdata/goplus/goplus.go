@@ -9,6 +9,9 @@ func save() error { return nil }
 func inspect(decision model.Decision) (string, error) {
 	try loaded := load()
 	try save()
+	defer {
+		_ = loaded.Variant()
+	}
 	qualified := model.Decision.Deny{Reason: "no"}
 	_ = qualified
 	switch loaded {
