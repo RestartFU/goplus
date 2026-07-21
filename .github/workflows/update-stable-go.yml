@@ -1,0 +1,91 @@
+name: Update stable Go
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-stable-go
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      - id: version
+        name: Find the latest stable Go release
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=$(curl --fail --silent --show-error 'https://go.dev/dl/?mode=json' |
+            jq -r 'map(select(.stable == true))[0].version')
+          current=$(head -n 1 VERSION)
+          test -n "$latest"
+          test "$latest" != null
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          if [[ $current == "$latest" ]]; then
+            echo "update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "update=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.version.outputs.update == 'true'
+        name: Merge the stable Go release
+        env:
+          VERSION: ${{ steps.version.outputs.latest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git remote add upstream https://go.googlesource.com/go
+          git fetch --no-tags upstream "refs/tags/$VERSION:refs/tags/$VERSION"
+          git switch -c "automation/$VERSION"
+          git merge --no-edit "$VERSION"
+
+      - if: steps.version.outputs.update == 'true'
+        name: Build and test Go+
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd src && ./make.bash)
+          ./bin/go test \
+            cmd/compile/internal/syntax \
+            cmd/compile/internal/types2 \
+            go/types \
+            go/parser \
+            go/format \
+            encoding/gob \
+            reflect
+
+      - if: steps.version.outputs.update == 'true'
+        name: Open the update pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.latest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="automation/$VERSION"
+          git push --force-with-lease origin "$branch"
+          if gh pr list --head "$branch" --state open --json number --jq 'length' | grep -qx 0; then
+            gh pr create \
+              --base master \
+              --head "$branch" \
+              --title "all: update to $VERSION" \
+              --body "Merge the latest stable Go release and verify the Go+ compiler features."
+          fi
