@@ -7,7 +7,7 @@ package main
 import "./enumlib"
 
 func main() {
-	var result enumlib.Result = Ok{Value: 3}
+	var result enumlib.Result = enumlib.Result.Ok{Value: 3}
 	if result.Or(0) != 3 {
 		panic("qualified imported result variant")
 	}

@@ -476,7 +476,7 @@ func (t *Named) EnumVariants() []*Named {
 			}
 		}
 		slices.SortFunc(variants, func(a, b *Named) int {
-			if c := a.Obj().Pos().Cmp(b.Obj().Pos()); c != 0 {
+			if c := cmpPos(a.Obj().Pos(), b.Obj().Pos()); c != 0 {
 				return c
 			}
 			return strings.Compare(a.Obj().Name(), b.Obj().Name())
@@ -496,7 +496,13 @@ func enumVariant(typ Type, name string) *Named {
 	}
 	orig := named.Origin().unpack()
 	if orig.enumInfo == nil {
-		if !orig.stateHas(hasUnder) || orig.enumMarker() == "" {
+		if !orig.stateHas(hasUnder) {
+			if orig.check != nil {
+				return nil
+			}
+			orig.Underlying()
+		}
+		if orig.enumMarker() == "" {
 			return nil
 		}
 	}

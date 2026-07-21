@@ -3,7 +3,7 @@ go test ./...
 -- go.mod --
 module example.com/enumimport
 
-go 1.28
+go 1.26
 
 -- timer/model.go --
 package timer
@@ -45,5 +45,7 @@ import "example.com/enumimport/timer"
 
 func Duration() int64 {
 	service := &timer.Service{}
-	return int64(timer.ChatKey().Duration()) + int64(service.Remaining(timer.ChatKey()))
+	keys := []timer.Key{timer.Key.Chat{}}
+	key := timer.Key(timer.Key.Chat{})
+	return int64(timer.ChatKey().Duration()) + int64(service.Remaining(keys[0])) + int64(service.Remaining(key))
 }
