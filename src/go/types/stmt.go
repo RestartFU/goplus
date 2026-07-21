@@ -989,7 +989,7 @@ Next:
 		var T Type
 		if check.isNil(e) {
 			var dummy operand
-			check.expr(nil, nil, &dummy, e)
+			check.expr(nil, &dummy, e)
 		} else {
 			if id, _ := e.(*ast.Ident); id != nil {
 				if variant := enumVariant(x.typ, id.Name); variant != nil {

@@ -150,8 +150,8 @@ func TestEnumVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = (&types.Config{GoVersion: "go1.27"}).Check("p", fset, []*ast.File{file}, nil)
-	if err == nil || !strings.Contains(err.Error(), "requires go1.28 or later") {
+	_, err = (&types.Config{GoVersion: "go1.25"}).Check("p", fset, []*ast.File{file}, nil)
+	if err == nil || !strings.Contains(err.Error(), "requires go1.26 or later") {
 		t.Fatalf("enum version error = %v", err)
 	}
 }

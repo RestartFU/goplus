@@ -132,9 +132,9 @@ func (B) Variant() string { return "B" }
 }
 
 func TestEnumVersion(t *testing.T) {
-	conf := Config{GoVersion: "go1.27"}
+	conf := Config{GoVersion: "go1.25"}
 	_, err := typecheck("package p; type E enum { A }", &conf, nil)
-	if err == nil || !strings.Contains(err.Error(), "requires go1.28 or later") {
+	if err == nil || !strings.Contains(err.Error(), "requires go1.26 or later") {
 		t.Fatalf("enum version error = %v", err)
 	}
 }

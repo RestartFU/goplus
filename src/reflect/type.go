@@ -1420,8 +1420,10 @@ func EnumVariantName(t Type) string {
 // name returned by [EnumVariantName]. It returns nil if no such linked type
 // exists in the program.
 func EnumVariantByName(name string) Type {
-	find := func(types []*abi.Type) Type {
-		for _, typ := range types {
+	sections, offsets := typelinks()
+	for i, section := range sections {
+		for _, offset := range offsets[i] {
+			typ := rtypeOff(section, offset)
 			if typ.TFlag&abi.TFlagEnumVariant == 0 {
 				continue
 			}
@@ -1429,17 +1431,6 @@ func EnumVariantByName(name string) Type {
 			if EnumVariantName(candidate) == name {
 				return candidate
 			}
-		}
-		return nil
-	}
-
-	first, rest := compiledTypelinks()
-	if typ := find(first); typ != nil {
-		return typ
-	}
-	for _, types := range rest {
-		if typ := find(types); typ != nil {
-			return typ
 		}
 	}
 	return nil

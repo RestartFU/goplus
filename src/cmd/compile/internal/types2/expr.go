@@ -952,22 +952,21 @@ const (
 	statement
 )
 
-// target represent the (signature) type and description of the LHS
-// variable of an assignment, or of a function result variable.
+// target represents the type and description of the LHS variable of an
+// assignment, or of a function result variable.
 type target struct {
+	typ  Type
 	sig  *Signature
 	desc string
 }
 
 // newTarget creates a new target for the given type and description.
-// The result is nil if typ is not a signature.
 func newTarget(typ Type, desc string) *target {
-	if typ != nil {
-		if sig, _ := typ.Underlying().(*Signature); sig != nil {
-			return &target{sig, desc}
-		}
+	if typ == nil {
+		return nil
 	}
-	return nil
+	sig, _ := typ.Underlying().(*Signature)
+	return &target{typ: typ, sig: sig, desc: desc}
 }
 
 // rawExpr typechecks expression e and initializes x with the expression
@@ -1020,7 +1019,7 @@ func (check *Checker) nonGeneric(T *target, x *operand) {
 		}
 	case *Signature:
 		if t.tparams != nil {
-			if enableReverseTypeInference && T != nil {
+			if enableReverseTypeInference && T != nil && T.sig != nil {
 				check.funcInst(T, x.Pos(), x, nil, true)
 				return
 			}
@@ -1087,7 +1086,11 @@ func (check *Checker) exprInternal(T *target, x *operand, e syntax.Expr, hint Ty
 		}
 
 	case *syntax.CompositeLit:
-		check.compositeLit(x, e, hint)
+		var targetType Type
+		if T != nil {
+			targetType = T.typ
+		}
+		check.compositeLit(x, e, hint, targetType)
 		if x.mode == invalid {
 			goto Error
 		}

@@ -104,7 +104,7 @@ func (check *Checker) funcLit(x *operand, e *syntax.FuncLit) {
 	}
 }
 
-func (check *Checker) compositeLit(x *operand, e *syntax.CompositeLit, hint Type) {
+func (check *Checker) compositeLit(x *operand, e *syntax.CompositeLit, hint, target Type) {
 	var typ, base Type
 	var isElem bool // true if composite literal is an element of an enclosing composite literal
 
@@ -112,7 +112,7 @@ func (check *Checker) compositeLit(x *operand, e *syntax.CompositeLit, hint Type
 	case e.Type != nil:
 		// composite literal type present - use it
 		if id, _ := e.Type.(*syntax.Name); id != nil {
-			context := U
+			context := target
 			if context == nil {
 				context = hint
 			}
